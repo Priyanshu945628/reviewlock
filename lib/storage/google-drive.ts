@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import https from "node:https";
 import crypto from "node:crypto";
 import { Readable } from "node:stream";
 import { google, type drive_v3 } from "googleapis";
@@ -84,14 +85,82 @@ export class GoogleDriveProvider implements StorageProvider {
     this.drive = google.drive({ version: "v3", auth: this.oauth2Client });
   }
 
+  private resolvedRootFolderId: string | null = null;
+
+  /**
+   * Resolves the root folder ID.
+   * If rootFolderId is already a valid Drive folder ID, uses it.
+   * If rootFolderId is a folder name (e.g. 'ReviewLock-Originals') or if direct lookup returns 404,
+   * searches Drive by name. If not found, creates the folder on Drive automatically.
+   */
+  public async getResolvedRootFolderId(): Promise<string> {
+    if (this.resolvedRootFolderId) {
+      return this.resolvedRootFolderId;
+    }
+
+    // 1. Try checking as direct Drive ID
+    try {
+      const res = await withRetry(() =>
+        this.drive.files.get({
+          fileId: this.rootFolderId,
+          fields: "id, name, mimeType, trashed",
+          supportsAllDrives: true,
+        })
+      );
+      if (res.data.id && !res.data.trashed) {
+        this.resolvedRootFolderId = res.data.id;
+        return res.data.id;
+      }
+    } catch {
+      // 404 or invalid ID: proceed to search by folder name
+    }
+
+    // 2. Search for existing folder with name matching this.rootFolderId
+    const safeName = this.rootFolderId.replace(/'/g, "\\'");
+    const listRes = await withRetry(() =>
+      this.drive.files.list({
+        q: `name = '${safeName}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+        fields: "files(id, name)",
+        spaces: "drive",
+      })
+    );
+
+    if (listRes.data.files && listRes.data.files.length > 0) {
+      const foundId = listRes.data.files[0].id!;
+      console.log(`[DriveProvider] Resolved root folder "${this.rootFolderId}" to Google Drive folder ID: ${foundId}`);
+      this.resolvedRootFolderId = foundId;
+      return foundId;
+    }
+
+    // 3. Folder does not exist yet -> Create it automatically
+    const createRes = await withRetry(() =>
+      this.drive.files.create({
+        requestBody: {
+          name: this.rootFolderId,
+          mimeType: "application/vnd.google-apps.folder",
+        },
+        fields: "id, name",
+      })
+    );
+
+    if (!createRes.data.id) {
+      throw new Error(`Failed to create root folder "${this.rootFolderId}" on Google Drive.`);
+    }
+
+    console.log(`[DriveProvider] Created missing root folder "${this.rootFolderId}" on Drive (ID: ${createRes.data.id})`);
+    this.resolvedRootFolderId = createRes.data.id;
+    return createRes.data.id;
+  }
+
   /**
    * Helper to locate or create a dedicated subfolder for the project under root folder:
    * <rootFolderId>/<projectId>/
    */
   private async getOrCreateProjectFolder(projectId: string): Promise<string> {
+    const rootId = await this.getResolvedRootFolderId();
     const listRes = await withRetry(() =>
       this.drive.files.list({
-        q: `'${this.rootFolderId}' in parents and name = '${projectId}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+        q: `'${rootId}' in parents and name = '${projectId}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
         fields: "files(id, name)",
         spaces: "drive",
       })
@@ -106,7 +175,7 @@ export class GoogleDriveProvider implements StorageProvider {
         requestBody: {
           name: projectId,
           mimeType: "application/vnd.google-apps.folder",
-          parents: [this.rootFolderId],
+          parents: [rootId],
         },
         fields: "id",
       })
@@ -177,34 +246,52 @@ export class GoogleDriveProvider implements StorageProvider {
       throw new Error("Google Drive did not return a resumable upload session URI (Location header missing)");
     }
 
-    // 4. Stream upload file to the session URI
-    const uploadRes = await withRetry(async () => {
-      const fileStream = fs.createReadStream(filePath);
-      const res = await fetch(sessionUri, {
-        method: "PUT",
-        headers: {
-          "Content-Length": String(localSize),
-          "Content-Type": mimeType,
-        },
-        // Readable.toWeb adapts Node.js stream to Web standard ReadableStream
-        body: Readable.toWeb(fileStream) as unknown as BodyInit,
-        // @ts-expect-error duplex is required in Node.js fetch when body is a stream
-        duplex: "half",
-      });
+    // 4. Stream upload file to the session URI with Content-Range
+    const uploadedData = await withRetry(async () => {
+      return new Promise<{ id: string; size: string; md5Checksum: string }>(
+        (resolve, reject) => {
+          const sessionUrl = new URL(sessionUri);
+          const req = https.request(
+            sessionUrl,
+            {
+              method: "PUT",
+              headers: {
+                "Content-Length": localSize,
+                "Content-Range": `bytes 0-${localSize - 1}/${localSize}`,
+                "Content-Type": mimeType,
+              },
+            },
+            (res) => {
+              let body = "";
+              res.setEncoding("utf8");
+              res.on("data", (chunk) => {
+                body += chunk;
+              });
+              res.on("end", () => {
+                if (res.statusCode === 200 || res.statusCode === 201) {
+                  try {
+                    resolve(JSON.parse(body));
+                  } catch (parseErr) {
+                    reject(parseErr);
+                  }
+                } else {
+                  reject(
+                    new Error(
+                      `Resumable upload failed (HTTP ${res.statusCode}): ${body}`
+                    )
+                  );
+                }
+              });
+            }
+          );
 
-      if (!res.ok && res.status !== 200 && res.status !== 201) {
-        const errText = await res.text();
-        throw new Error(`Resumable upload failed (HTTP ${res.status}): ${errText}`);
-      }
-
-      return res;
+          req.on("error", reject);
+          const fileStream = fs.createReadStream(filePath);
+          fileStream.on("error", reject);
+          fileStream.pipe(req);
+        }
+      );
     });
-
-    const uploadedData = (await uploadRes.json()) as {
-      id: string;
-      size: string;
-      md5Checksum: string;
-    };
 
     const remoteSize = parseInt(uploadedData.size, 10);
     const remoteMd5 = uploadedData.md5Checksum?.toLowerCase();
@@ -292,13 +379,8 @@ export class GoogleDriveProvider implements StorageProvider {
    */
   async ping(): Promise<boolean> {
     try {
-      const res = await withRetry(() =>
-        this.drive.files.get({
-          fileId: this.rootFolderId,
-          fields: "id, name, trashed",
-        })
-      );
-      return Boolean(res.data && !res.data.trashed);
+      const folderId = await this.getResolvedRootFolderId();
+      return Boolean(folderId);
     } catch (err) {
       console.error("[DriveProvider] Ping check failed:", err);
       return false;

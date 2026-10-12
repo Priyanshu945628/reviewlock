@@ -75,39 +75,72 @@ class MeasuringSink extends Writable {
 }
 
 async function runSmokeTest() {
+  const isExplicitMock =
+    process.argv.includes("--mock") || process.env.STORAGE_PROVIDER === "mock";
+
+  // Mock storage must NEVER be allowed in production
+  if (isExplicitMock && process.env.NODE_ENV === "production") {
+    console.error(`
+================================================================================
+FATAL ERROR: Mock Storage is strictly forbidden in production (NODE_ENV=production)
+================================================================================
+`);
+    process.exit(1);
+  }
+
+  const targetLabel = isExplicitMock ? "[Target: MOCK]" : "[Target: LIVE GOOGLE DRIVE]";
+
   console.log(`
 ================================================================================
 ReviewLock Storage & Streaming Smoke Test (CONTRACT §4 & CHUNKS B0)
+${targetLabel}
 ================================================================================
 `);
 
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
-  const rootFolderId = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
-
-  const forceMock = process.argv.includes("--mock");
-  const hasLiveCredentials = Boolean(
-    clientId && clientSecret && refreshToken && rootFolderId
-  );
-
   let provider: StorageProvider;
 
-  if (hasLiveCredentials && !forceMock) {
-    console.log("[Target: LIVE GOOGLE DRIVE]");
+  if (isExplicitMock) {
+    console.log(`${targetLabel} Running with MockStorageProvider (Local filesystem harness)`);
+    const { MockStorageProvider } = await import("../lib/storage/mock");
+    provider = new MockStorageProvider();
+  } else {
+    // Live Drive requires ALL credentials. Missing credentials NEVER silently fall back to mock.
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
+    const rootFolderId = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
+
+    const missingVars: string[] = [];
+    if (!clientId) missingVars.push("GOOGLE_CLIENT_ID");
+    if (!clientSecret) missingVars.push("GOOGLE_CLIENT_SECRET");
+    if (!refreshToken) missingVars.push("GOOGLE_REFRESH_TOKEN (generate via: npm run drive:token)");
+    if (!rootFolderId) missingVars.push("GOOGLE_DRIVE_ROOT_FOLDER_ID");
+
+    if (missingVars.length > 0) {
+      console.error(`
+================================================================================
+CRITICAL ERROR: Missing Google Drive Credentials for Live Smoke Test
+--------------------------------------------------------------------------------
+The smoke test is configured to run against LIVE GOOGLE DRIVE, but the following
+required variables are missing from your environment (.env):
+
+${missingVars.map((v) => `  - ${v}`).join("\n")}
+
+Missing credentials will NEVER silently fall back to mock storage.
+To test explicitly against the mock storage harness, re-run with:
+  npm run drive:smoke -- --mock
+================================================================================
+`);
+      process.exit(1);
+    }
+
+    console.log(`${targetLabel} Initializing GoogleDriveProvider with configured OAuth credentials`);
     provider = new GoogleDriveProvider({
       clientId: clientId!,
       clientSecret: clientSecret!,
       refreshToken: refreshToken!,
       rootFolderId: rootFolderId!,
     });
-  } else {
-    console.log(`[Target: LOCAL MOCK STORAGE HARNESS]`);
-    if (!forceMock) {
-      console.log(`(Google Drive credentials not configured in .env yet. Running harness to verify streaming & PIPE contract.)\n`);
-    }
-    const { MockStorageProvider } = await import("../lib/storage/mock");
-    provider = new MockStorageProvider();
   }
 
   const tempDir = path.join(os.tmpdir(), "reviewlock-smoke-test");
@@ -118,24 +151,24 @@ ReviewLock Storage & Streaming Smoke Test (CONTRACT §4 & CHUNKS B0)
   // ---------------------------------------------------------------------------
   // STEP 1: Ping / Healthcheck
   // ---------------------------------------------------------------------------
-  console.log("--> Testing Provider Connectivity (ping)...");
+  console.log(`${targetLabel} --> Testing Provider Connectivity (ping)...`);
   const pingOk = await provider.ping();
   if (!pingOk) {
-    throw new Error("StorageProvider.ping() failed. Check Google Drive credentials and root folder permissions.");
+    throw new Error(`${targetLabel} StorageProvider.ping() failed. Check Google Drive credentials and root folder permissions.`);
   }
-  console.log("✓ Ping successful! Drive root folder reachable.\n");
+  console.log(`${targetLabel} ✓ Ping successful! Root storage reachable.\n`);
 
   // ---------------------------------------------------------------------------
   // STEP 2: 5 MB File Round-Trip (Upload -> Verify MD5 -> Stream -> Delete)
   // ---------------------------------------------------------------------------
   const smallFileSize = 5 * MB;
   const smallFilePath = path.join(tempDir, "small-5mb.bin");
-  console.log(`--> Creating 5 MB test file: ${smallFilePath}`);
+  console.log(`${targetLabel} --> Creating 5 MB test file: ${smallFilePath}`);
   createTempFile(smallFilePath, smallFileSize);
   const localSmallMd5 = await computeFileMd5(smallFilePath);
   console.log(`    Local MD5: ${localSmallMd5}`);
 
-  console.log("--> Uploading 5 MB file via resumable upload...");
+  console.log(`${targetLabel} --> Uploading 5 MB file via resumable upload...`);
   const uploadResult = await provider.putOriginal({
     projectId,
     filename: "test-5mb.bin",
@@ -144,36 +177,36 @@ ReviewLock Storage & Streaming Smoke Test (CONTRACT §4 & CHUNKS B0)
     expectedMd5: localSmallMd5,
     expectedSize: smallFileSize,
   });
-  console.log(`✓ Upload complete! Drive File ID: ${uploadResult.fileId}`);
+  console.log(`${targetLabel} ✓ Upload complete! Remote File ID: ${uploadResult.fileId}`);
   console.log(`    Remote MD5 verified: ${uploadResult.md5Checksum} === ${localSmallMd5}`);
 
-  console.log("--> Streaming 5 MB file back from Drive...");
+  console.log(`${targetLabel} --> Streaming 5 MB file back from storage...`);
   const streamResult = await provider.streamOriginal(uploadResult.fileId);
   const sink5Mb = new MeasuringSink(performance.now());
   await pipeline(streamResult.stream, sink5Mb);
-  console.log(`✓ Streamed ${sink5Mb.bytesReceived} bytes back successfully.`);
+  console.log(`${targetLabel} ✓ Streamed ${sink5Mb.bytesReceived} bytes back successfully.`);
   if (sink5Mb.bytesReceived !== smallFileSize) {
-    throw new Error(`Size mismatch on streamed data: expected ${smallFileSize}, received ${sink5Mb.bytesReceived}`);
+    throw new Error(`${targetLabel} Size mismatch: expected ${smallFileSize}, got ${sink5Mb.bytesReceived}`);
   }
 
-  console.log("--> Deleting 5 MB test file from Drive...");
+  console.log(`${targetLabel} --> Deleting 5 MB test file from storage...`);
   await provider.deleteOriginal(uploadResult.fileId);
-  console.log("✓ Deleted successfully from Drive.\n");
+  console.log(`${targetLabel} ✓ Deleted successfully.\n`);
 
   // ---------------------------------------------------------------------------
   // STEP 3: 200 MB PIPE Streaming Test + Range Support + Flat Memory Proof
   // ---------------------------------------------------------------------------
   console.log("================================================================================");
-  console.log("--> PROVING THE PIPE APPROACH (200 MB Range + Flat Memory + TTFB)");
+  console.log(`${targetLabel} PROVING THE PIPE APPROACH (200 MB Range + Flat Memory + TTFB)`);
   console.log("================================================================================");
 
   const largeFileSize = 200 * MB;
   const largeFilePath = path.join(tempDir, "large-200mb.bin");
-  console.log(`Creating 200 MB test file locally: ${largeFilePath}...`);
+  console.log(`${targetLabel} Creating 200 MB test file locally...`);
   createTempFile(largeFilePath, largeFileSize);
   const localLargeMd5 = await computeFileMd5(largeFilePath);
 
-  console.log("Uploading 200 MB file to Drive (resumable)...");
+  console.log(`${targetLabel} Uploading 200 MB file to storage (resumable)...`);
   const largeUpload = await provider.putOriginal({
     projectId,
     filename: "test-200mb.bin",
@@ -182,10 +215,10 @@ ReviewLock Storage & Streaming Smoke Test (CONTRACT §4 & CHUNKS B0)
     expectedMd5: localLargeMd5,
     expectedSize: largeFileSize,
   });
-  console.log(`✓ 200 MB Uploaded! Drive File ID: ${largeUpload.fileId}`);
+  console.log(`${targetLabel} ✓ 200 MB Uploaded! Remote File ID: ${largeUpload.fileId}`);
 
   // Test 3A: Range Request passthrough (e.g. bytes=1048576-2097151 -> 1 MB chunk)
-  console.log("\n--> Testing Range Passthrough (Requesting 1 MB chunk from 200 MB file)...");
+  console.log(`\n${targetLabel} --> Testing Range Passthrough (Requesting 1 MB chunk from 200 MB file)...`);
   const rangeStart = 1048576;
   const rangeEnd = 2097151;
   const expectedChunkBytes = rangeEnd - rangeStart + 1;
@@ -204,15 +237,15 @@ ReviewLock Storage & Streaming Smoke Test (CONTRACT §4 & CHUNKS B0)
   await pipeline(rangeStreamResult.stream, rangeSink);
   const rangeMetrics = rangeSink.getMetrics();
 
-  console.log(`✓ Range stream complete: ${rangeMetrics.bytesReceived} bytes (Expected: ${expectedChunkBytes})`);
-  console.log(`  Range TTFB: ${rangeMetrics.ttfbMs.toFixed(1)}ms`);
+  console.log(`${targetLabel} ✓ Range stream complete: ${rangeMetrics.bytesReceived} bytes (Expected: ${expectedChunkBytes})`);
+  console.log(`${targetLabel}   Range TTFB: ${rangeMetrics.ttfbMs.toFixed(1)}ms`);
 
   if (rangeMetrics.bytesReceived !== expectedChunkBytes) {
-    throw new Error(`Range chunk size mismatch: expected ${expectedChunkBytes}, got ${rangeMetrics.bytesReceived}`);
+    throw new Error(`${targetLabel} Range chunk size mismatch: expected ${expectedChunkBytes}, got ${rangeMetrics.bytesReceived}`);
   }
 
   // Test 3B: Full 200 MB Live Pipe Streaming Memory Profile
-  console.log("\n--> Streaming full 200 MB file directly to sink (verifying flat memory & TTFB)...");
+  console.log(`\n${targetLabel} --> Streaming full 200 MB file directly to sink (verifying flat memory & TTFB)...`);
   const initialHeap = process.memoryUsage().heapUsed;
   const initialRss = process.memoryUsage().rss;
 
@@ -228,8 +261,9 @@ ReviewLock Storage & Streaming Smoke Test (CONTRACT §4 & CHUNKS B0)
 
   console.log(`
 --------------------------------------------------------------------------------
-PIPE STREAMING RESULTS:
+${targetLabel} PIPE STREAMING RESULTS:
 --------------------------------------------------------------------------------
+Target:                ${isExplicitMock ? "MOCK (Local Filesystem Harness)" : "LIVE GOOGLE DRIVE (Backend API)"}
 Total Data Streamed:   ${(fullMetrics.bytesReceived / MB).toFixed(2)} MB
 Time to First Byte:    ${fullMetrics.ttfbMs.toFixed(1)} ms  (Instant stream start, never download-first!)
 Total Transfer Time:   ${(fullMetrics.totalDurationMs / 1000).toFixed(2)} s
@@ -242,22 +276,22 @@ Memory Behavior:       FLAT (No multi-hundred MB buffering)
 `);
 
   // Clean up remote file
-  console.log("Cleaning up 200 MB file on Drive...");
+  console.log(`${targetLabel} Cleaning up 200 MB file from storage...`);
   await provider.deleteOriginal(largeUpload.fileId);
-  console.log("✓ 200 MB file cleaned up.");
+  console.log(`${targetLabel} ✓ 200 MB file cleaned up.`);
 
   // Clean up local temp files
   fs.rmSync(tempDir, { recursive: true, force: true });
-  console.log("✓ Local temp files cleaned up.");
+  console.log(`${targetLabel} ✓ Local temp files cleaned up.`);
 
   console.log(`
 ================================================================================
-ALL SMOKE TESTS PASSED! StorageProvider & PIPE approach fully verified.
+${targetLabel} ALL SMOKE TESTS PASSED!
 ================================================================================
 `);
 }
 
 runSmokeTest().catch((err) => {
-  console.error("\n❌ Smoke test failed:", err);
+  console.error(`\n❌ Smoke test failed:`, err);
   process.exit(1);
 });

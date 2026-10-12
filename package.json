@@ -11,7 +11,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "drive:token": "tsx scripts/get-drive-token.ts",
-    "drive:smoke": "tsx scripts/drive-smoke-test.ts"
+    "drive:smoke": "tsx scripts/drive-smoke-test.ts",
+    "test:contracts": "tsx scripts/test-b0-contracts.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.39.3",

@@ -59,9 +59,9 @@ let serverClosed = false;
 
 const server = http.createServer(async (req, res) => {
   try {
-    const parsedUrl = url.parse(req.url || "", true);
+    const parsedUrl = new URL(req.url || "", `http://localhost:${REDIRECT_PORT}`);
     if (parsedUrl.pathname === "/oauth2callback") {
-      const code = parsedUrl.query.code as string;
+      const code = parsedUrl.searchParams.get("code");
       if (code) {
         res.writeHead(200, { "Content-Type": "text/html" });
         res.end(

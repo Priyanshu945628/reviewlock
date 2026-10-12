@@ -95,16 +95,12 @@ const envSchema = z.object({
 
 export type Env = z.infer<typeof envSchema>;
 
-function validateEnv(): Env {
-  // Allow skipping during next build or container build phase so builds succeed before runtime secrets are attached
-  const isBuildPhase =
-    process.env.npm_lifecycle_event === "build" ||
-    process.env.NEXT_PHASE === "phase-production-build" ||
-    process.env.SKIP_ENV_VALIDATION === "1" ||
-    process.env.SKIP_ENV_VALIDATION === "true";
+function validateEnv(customEnv?: Record<string, string | undefined>): Env {
+  const targetEnv = customEnv || process.env;
 
-  if (isBuildPhase) {
-    return new Proxy(process.env as unknown as Env, {
+  // CONTRACT §8: Bypass applies ONLY during Next.js production build phase (static page collection)
+  if (process.env.NEXT_PHASE === "phase-production-build") {
+    return new Proxy(targetEnv as unknown as Env, {
       get(target, prop) {
         if (typeof prop === "string" && prop in target) {
           return target[prop as keyof Env];
@@ -114,7 +110,7 @@ function validateEnv(): Env {
     });
   }
 
-  const result = envSchema.safeParse(process.env);
+  const result = envSchema.safeParse(targetEnv);
 
   if (!result.success) {
     const formattedErrors = result.error.errors
