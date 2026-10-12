@@ -309,6 +309,24 @@ This document tracks system components, topological boundaries, data flow, and s
 - **Automated Verification**:
   - `scripts/test-b6-downloads.ts`: 28/28 tests passing (unlock transition, audit log, token signature validation, atomic consumption, replay rejection, tampered signature rejection, expiration rejection, cross-link rejection, byte-identical SHA-256 master verification, HTTP 206 range slicing, client disconnect abort).
 
+### B7 — Hardening & Security Infrastructure
+- **Security Headers & Content-Security-Policy (`next.config.ts`)**:
+  - `Content-Security-Policy` with `default-src 'self'`, `frame-ancestors 'none'`, and restricted directives.
+  - `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `X-XSS-Protection: 1; mode=block`.
+  - `Referrer-Policy: strict-origin-when-cross-origin`.
+  - `Permissions-Policy: camera=(), microphone=(), geolocation=(), browsing-topics=()`.
+  - `Strict-Transport-Security: max-age=63072000; includeSubDomains; preload`.
+- **Route & Middleware Protection (`middleware.ts`)**:
+  - Session authentication strictly enforced on all editor pages (`/projects`, `/links`, `/activity`, `/settings`) and APIs (`/api/projects/*`, `/api/links/*`, `/api/me/*`, `/api/uploads/*`).
+- **Automated Secret & Token Redaction (`lib/logger.ts`)**:
+  - Sanitizes Google OAuth refresh tokens (`1//...`), HMAC signed tokens, Argon2id password hashes, session cookies, password/passcode JSON fields, and Google Drive file IDs before output.
+- **Drive Permissions Audit (`auditFolderPermissions`)**:
+  - Verifies root folder has zero public (`anyone` / `anyoneWithLink`) permissions on Google Drive.
+- **Threat Model & Security Documentation**:
+  - Comprehensive `SECURITY.md` tracking actor threats, mitigations, cryptographic foundations, and physical/screen-recording boundaries.
+- **Automated Verification**:
+  - `scripts/test-b7-security.ts`: 38/38 tests passing (cryptographic HMAC verification, tamper rejection, single-use download token replay rejection, 5-try/15-min passcode lockout, multi-pattern log redaction, and live Google Drive root folder permissions audit).
+
 ---
 
 ## 3. Contract & Design Deviations (Explicitly Tracked)

@@ -386,4 +386,37 @@ export class GoogleDriveProvider implements StorageProvider {
       return false;
     }
   }
+
+  /**
+   * Audits root folder permissions to confirm NO public sharing exists (CONTRACT §4 & CHUNKS B7).
+   * Confirms that 'anyoneWithLink' or 'anyone' permissions are absent.
+   */
+  async auditFolderPermissions(): Promise<{
+    secure: boolean;
+    permissions: any[];
+    warnings: string[];
+  }> {
+    const folderId = await this.getResolvedRootFolderId();
+    const res = await withRetry(() =>
+      this.drive.permissions.list({
+        fileId: folderId,
+        fields: "permissions(id, type, role, allowFileDiscovery)",
+      })
+    );
+
+    const permissions = res.data.permissions || [];
+    const warnings: string[] = [];
+    let secure = true;
+
+    for (const perm of permissions) {
+      if (perm.type === "anyone") {
+        secure = false;
+        warnings.push(
+          `Insecure permission detected: type='anyone', role='${perm.role}' on root folder.`
+        );
+      }
+    }
+
+    return { secure, permissions, warnings };
+  }
 }

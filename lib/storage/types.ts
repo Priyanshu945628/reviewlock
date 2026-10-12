@@ -51,4 +51,13 @@ export interface StorageProvider {
    * Healthcheck to verify storage access and root folder reachability.
    */
   ping(): Promise<boolean>;
+
+  /**
+   * Audits storage container permissions to confirm no public sharing exists (CONTRACT §4 & CHUNKS B7).
+   */
+  auditFolderPermissions?(): Promise<{
+    secure: boolean;
+    permissions: any[];
+    warnings: string[];
+  }>;
 }

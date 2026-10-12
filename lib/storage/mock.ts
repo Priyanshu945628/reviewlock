@@ -93,4 +93,16 @@ export class MockStorageProvider implements StorageProvider {
   async ping(): Promise<boolean> {
     return true;
   }
+
+  async auditFolderPermissions(): Promise<{
+    secure: boolean;
+    permissions: any[];
+    warnings: string[];
+  }> {
+    return {
+      secure: true,
+      permissions: [{ id: "mock-owner-perm", type: "user", role: "owner" }],
+      warnings: [],
+    };
+  }
 }

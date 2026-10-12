@@ -6,11 +6,14 @@ export function middleware(request: NextRequest) {
 
   const isProtectedApi =
     pathname.startsWith("/api/projects") ||
+    pathname.startsWith("/api/links") ||
     pathname.startsWith("/api/me") ||
     pathname.startsWith("/api/uploads");
 
   const isProtectedPage =
     pathname.startsWith("/projects") ||
+    pathname.startsWith("/links") ||
+    pathname.startsWith("/activity") ||
     pathname.startsWith("/settings");
 
   if (!isProtectedApi && !isProtectedPage) {
@@ -44,8 +47,11 @@ export function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     "/projects/:path*",
+    "/links/:path*",
+    "/activity/:path*",
     "/settings/:path*",
     "/api/projects/:path*",
+    "/api/links/:path*",
     "/api/me/:path*",
     "/api/uploads/:path*",
   ],
