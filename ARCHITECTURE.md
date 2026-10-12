@@ -180,8 +180,30 @@ This document tracks system components, topological boundaries, data flow, and s
   - `PATCH /api/projects/:id`: Renames project title.
   - `DELETE /api/projects/:id`: Deletes project from database, deletes original file from Google Drive via storage provider, decrements user storage quota, and logs to `audit_log`.
   - `GET /api/projects/:id/thumbs`: Serves thumbnail sprite JPEG (`?image=true`), WebVTT text (`?vtt=true`), or JSON metadata.
-- **Verification (`scripts/test-b3-worker.ts`)**:
-  - Automated test suite verifying HLS generation (master playlist + TS segments), preview MP4 generation, thumbnail sprite + WebVTT generation, end-to-end `processProjectJob` execution (ready status, Drive upload, local cleanup, storage increment, audit log), and failure transitions on missing files.
+### F3 — Upload UI & Project Detail
+- **Resumable Client Upload Context (`components/upload/upload-context.tsx`)**:
+  - Global `UploadProvider` exposing `useUpload()` hook managing multi-part chunked uploads.
+  - Slices video files into 8 MiB chunks, queries upload session status for resumed uploads, and sends chunks to `/api/uploads/:id/chunk?index=n`.
+  - Calculates real-time upload speed (MB/s), remaining time estimate (`timeLeftFormatted`), and upload progress percentage.
+  - Features pause, resume, and cancel with `AbortController` cancellation.
+  - Auto-polls upload session and project readiness across processing pipeline stages (`Uploaded ✓` → `Building secure preview` → `Saving original to private storage`).
+- **Upload Dialog (`components/upload/upload-dialog.tsx`) & Docked Tray (`components/upload/upload-tray.tsx`)**:
+  - 640px modal dialog featuring embedded Dropzone, auto-cleaned title generator, speed/time stats, and 3-step live progress indicators.
+  - Minimizable to 320px docked upload tray (`fixed bottom-4 right-4`) that persists across navigation with expandable/cancellable controls.
+- **Project Detail Page (`app/(editor)/projects/[id]/page.tsx`)**:
+  - Conforms strictly to DESIGN §6.5 layout (flexible left column, 340px sticky right column).
+  - Left column:
+    - Custom preview video player rendering owner's watermarked proxy preview with scrubbing, timecode tags, and diagonal watermark overlay.
+    - Two-tab layout: `Share links` (count) and `Activity` log.
+    - Share link cards displaying client label, status pill, slug with copy button, timecode range, viewer counters (`viewersUsed / maxViewers`), and relative expiry.
+    - Contextual "Release full file" prompt and button appearing automatically when link status is `viewers_exhausted` or `expired`.
+  - Right column:
+    - Inline project title renaming (`PATCH /api/projects/:id`) with keyboard shortcuts (Enter to save, Escape to cancel).
+    - Metadata badges: status pill, duration timecode, formatted byte size, resolution & fps, and relative upload date.
+    - Primary `+ Create share link` button.
+    - Danger zone with `Delete project` action protected by `ConfirmDialog`.
+- **Project Preview Endpoint (`app/api/projects/[id]/preview/route.ts`)**:
+  - Authenticated route streaming owner's watermarked preview video with HTTP 206 `Accept-Ranges` support for smooth scrubbing.
 
 ---
 

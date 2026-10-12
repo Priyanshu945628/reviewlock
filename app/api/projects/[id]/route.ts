@@ -3,7 +3,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionFromCookie } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { projects, renditions, users, auditLog } from "@/lib/db/schema";
+import { projects, renditions, users, auditLog, shareLinks } from "@/lib/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { getStorageProvider } from "@/lib/storage";
 
@@ -38,10 +38,49 @@ export async function GET(
     .from(renditions)
     .where(eq(renditions.projectId, projectId));
 
+  const links = await db
+    .select()
+    .from(shareLinks)
+    .where(eq(shareLinks.projectId, projectId));
+
+  const linkCount = links.length;
+  const viewedCount = links.reduce((acc, l) => acc + (l.viewersUsed || 0), 0);
+  const latestLink = links.sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  )[0];
+
+  let lastViewedRelative = "Never";
+  if (latestLink && viewedCount > 0) {
+    lastViewedRelative = latestLink.createdAt.toISOString();
+  } else if (linkCount > 0) {
+    lastViewedRelative = "Created " + latestLink.createdAt.toISOString();
+  }
+
+  let statusLabel = "Ready";
+  if (project.status === "uploading" || project.status === "processing") {
+    statusLabel = "Processing";
+  } else if (project.status === "failed") {
+    statusLabel = "Failed";
+  } else if (links.some((l) => l.status === "unlocked")) {
+    statusLabel = "Paid";
+  } else if (links.some((l) => l.status === "viewers_exhausted")) {
+    statusLabel = "Awaiting payment";
+  }
+
   return NextResponse.json({
     ok: true,
     data: {
-      project,
+      project: {
+        ...project,
+        createdAt: project.createdAt.toISOString(),
+        durationSeconds: project.durationSeconds || 0,
+        width: project.width || 1920,
+        height: project.height || 1080,
+        linkCount,
+        viewedCount,
+        lastViewedRelative,
+        statusLabel,
+      },
       renditions: projectRenditions,
     },
   });

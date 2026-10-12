@@ -23,11 +23,13 @@ import {
 import { formatBytes } from "@/lib/format";
 import { api } from "@/lib/api";
 import { MockProject } from "@/lib/mocks/data";
+import { useUpload } from "@/components/upload/upload-context";
 import { cn } from "@/lib/utils";
 
 type FilterStatus = "all" | "processing" | "ready" | "awaiting_payment" | "paid";
 
 export default function ProjectsDashboardPage() {
+  const { openUploadDialog } = useUpload();
   const [projects, setProjects] = React.useState<MockProject[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -77,7 +79,7 @@ export default function ProjectsDashboardPage() {
         title="Projects"
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
-        onNewUpload={() => alert("Upload dialog will open in Chunk F3/B2")}
+        onNewUpload={() => openUploadDialog()}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-8 space-y-6">
@@ -184,9 +186,7 @@ export default function ProjectsDashboardPage() {
             >
               <div className="max-w-md mx-auto mt-4">
                 <Dropzone
-                  onFileSelect={() =>
-                    alert("Dropzone triggered file select")
-                  }
+                  onFileSelect={(file) => openUploadDialog(file)}
                 />
               </div>
             </EmptyState>
