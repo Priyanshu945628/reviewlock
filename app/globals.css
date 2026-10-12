@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* surfaces (dark only in v1) */
+  --bg:            #0B0B0E;  /* app background */
+  --surface-1:     #121217;  /* cards, sidebar */
+  --surface-2:     #18181F;  /* inputs, hovered cards, popovers */
+  --surface-3:     #20202A;  /* pressed, selected rows */
+  --border:        #262630;  /* default 1px borders */
+  --border-strong: #35354A;  /* focus-adjacent, dividers on hover */
+
+  /* text */
+  --text:          #ECECF1;
+  --text-muted:    #9494A6;
+  --text-faint:    #62627A;
+
+  /* brand = the playhead */
+  --accent:        #FFB020;  /* amber */
+  --accent-hover:  #FFC24D;
+  --accent-soft:   rgba(255,176,32,0.12);
+  --accent-ink:    #1A1204;  /* text on accent buttons */
+
+  /* semantic */
+  --success: #3DDC97;  --success-soft: rgba(61,220,151,0.12);
+  --danger:  #FF5C6C;  --danger-soft:  rgba(255,92,108,0.12);
+  --info:    #6EA8FF;  --info-soft:    rgba(110,168,255,0.12);
+
+  /* shape */
+  --radius-sm: 6px; --radius-md: 10px; --radius-lg: 14px; /* never above 14px */
+
+  /* motion */
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur-fast: 120ms; --dur-base: 200ms; --dur-slow: 360ms;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: var(--font-inter), sans-serif;
+  min-height: 100vh;
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+}

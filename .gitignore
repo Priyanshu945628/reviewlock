@@ -1,0 +1,39 @@
+# Node modules
+node_modules/
+/.pnp
+.pnp.js
+
+# Testing & Coverage
+coverage/
+
+# Next.js build output
+/.next/
+/out/
+
+# Production build artifacts
+build/
+dist/
+
+# Misc
+.DS_Store
+*.pem
+*.log
+
+# Local env files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Vercel / Railway
+.vercel
+.railway
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Storage & Temp directories
+/data/
+/tmp/
