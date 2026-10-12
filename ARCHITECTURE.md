@@ -67,6 +67,33 @@ This document tracks system components, topological boundaries, data flow, and s
   - `scripts/drive-smoke-test.ts`: Verified against live Google Drive with explicit target labeling (`[Target: LIVE GOOGLE DRIVE]` vs `[Target: MOCK]`).
   - `scripts/test-b0-contracts.ts`: Automated contract tests verifying production mock prohibition, silent fallback prevention, and runtime env fail-fast behavior.
 
+### B1 — Database & Editor Auth
+- **Database Schema & Migrations**:
+  - `lib/db/schema.ts`: Complete Drizzle schema declaring all 9 tables and enums from `CONTRACT.md` §7:
+    - `users` (id, email, password_hash, display_name, storage_used_bytes, created_at)
+    - `sessions` (id, user_id, expires_at, created_at)
+    - `projects` (id, user_id, title, status, original_filename, original_size, duration_seconds, width, height, drive_file_id, drive_md5, created_at)
+    - `upload_sessions` (id, project_id, total_size, chunk_size, received_chunks_json, status, created_at)
+    - `renditions` (id, project_id, version, type, local_path, duration, status, created_at)
+    - `share_links` (id, project_id, slug, client_label, visibility, passcode_hash, preview_mode, preview_start, preview_end, max_viewers, viewers_used, allow_preview_download, watermark_text, expires_at, status, unlocked_at, created_at)
+    - `viewer_sessions` (id, link_id, ip_hash, ua_hash, first_seen, last_seen)
+    - `download_grants` (id, link_id, token_hash, expires_at, used_at, kind)
+    - `audit_log` (id, actor_type, actor_id, entity, entity_id, action, meta_json, created_at)
+  - `drizzle/0000_clean_miss_america.sql`: Initial SQL migration for all 9 tables, enum types, and foreign key constraints.
+- **Authentication & Security**:
+  - `lib/auth/password.ts`: Argon2id password hashing and verification.
+  - `lib/auth/session.ts` & `lib/auth/constants.ts`: Database session lifecycle with 30-day expiry and `httpOnly`, `secure`, `sameSite=lax`, `path=/` cookie (`rl_sess`).
+  - `lib/auth/rate-limit.ts`: In-memory sliding window rate limiter enforcing 5 attempts per 15 minutes per IP on auth routes.
+  - `lib/auth/middleware.ts` & `middleware.ts`: Next.js middleware protecting `/projects*`, `/settings*`, `/api/projects*`, `/api/uploads*`, and `/api/me*`.
+- **API Surface**:
+  - `POST /api/auth/signup`: User creation, Argon2id hashing, session generation, cookie dispatch.
+  - `POST /api/auth/login`: Rate-limited login, password verification, session issuance.
+  - `POST /api/auth/logout`: Database session invalidation and cookie clearance.
+  - `GET /api/auth/me`: Authenticated profile endpoint returning editor details.
+- **Data Seeding & Verification**:
+  - `scripts/seed.ts`: Seed script populating DESIGN §12 content (Editor "Priyanshu", 3 projects: Wedding Reel 4:12, Brand Promo 1:48, Podcast 38:05, and 2 share links: Rahul, Studio Kala).
+  - `scripts/test-b1-auth.ts`: Automated test suite covering Argon2id hashing, rate limiting, session lifecycle, and all auth route handlers.
+
 ---
 
 ## 3. Contract & Design Deviations (Explicitly Tracked)

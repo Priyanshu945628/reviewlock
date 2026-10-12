@@ -10,11 +10,14 @@
     "lint": "next lint",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "db:seed": "tsx scripts/seed.ts",
     "drive:token": "tsx scripts/get-drive-token.ts",
     "drive:smoke": "tsx scripts/drive-smoke-test.ts",
-    "test:contracts": "tsx scripts/test-b0-contracts.ts"
+    "test:contracts": "tsx scripts/test-b0-contracts.ts",
+    "test:auth": "tsx --env-file=.env scripts/test-b1-auth.ts"
   },
   "dependencies": {
+    "argon2": "^0.45.1",
     "drizzle-orm": "^0.39.3",
     "googleapis": "^146.0.0",
     "next": "^15.1.7",
@@ -31,6 +34,7 @@
     "autoprefixer": "^10.4.20",
     "dotenv": "^16.4.7",
     "drizzle-kit": "^0.30.4",
+    "pg-mem": "^3.0.14",
     "postcss": "^8.5.2",
     "tailwindcss": "^3.4.17",
     "tsx": "^4.19.3",

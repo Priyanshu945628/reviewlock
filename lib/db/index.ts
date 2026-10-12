@@ -21,7 +21,11 @@ function getClient(): postgres.Sql {
 }
 
 export const client = getClient();
-export const db = drizzle(client, { schema });
+export let db = drizzle(client, { schema });
+
+export function setTestDb(customDb: any): void {
+  db = customDb;
+}
 
 export async function checkDbHealth(): Promise<boolean> {
   try {
