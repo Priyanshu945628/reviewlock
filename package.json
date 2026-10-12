@@ -18,6 +18,7 @@
     "test:uploads": "tsx --env-file=.env scripts/test-b2-uploads.ts",
     "test:worker": "tsx --env-file=.env scripts/test-b3-worker.ts",
     "test:links": "tsx --env-file=.env scripts/test-b4-links.ts",
+    "test:streaming": "tsx --env-file=.env scripts/test-b5-streaming.ts",
     "worker": "tsx --env-file=.env scripts/worker.ts"
   },
   "dependencies": {

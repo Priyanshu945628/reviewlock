@@ -245,9 +245,26 @@ This document tracks system components, topological boundaries, data flow, and s
   - Handles: 10px wide × full-height rounded bars with dual grip lines and floating timecode tags. Hit area ≥ 44px for touch accessibility.
   - Locked region: Darkened 70% with 45° diagonal repeating gradient hatch pattern and centered lock icon when width ≥ 80px.
   - Keyboard accessible: Handles focusable with Left/Right (1s), Shift+Left/Right (10s), and Home/End snapping.
-- **Wire-up & Showcase**:
-  - Fully wired into Project Detail page (`app/(editor)/projects/[id]/page.tsx`): empty state, right sidebar button, and link row `[Edit]` buttons open the drawer in create or edit mode and refresh link lists on submission.
-  - Fully demonstrated on `/dev/components` showcase page.
+### B5 — Viewer Access & Streaming
+- **Viewer Engine (`lib/viewer/service.ts`)**:
+  - `generateStreamToken`: Generates HMAC-SHA256 token (`linkId.sessionId.exp.sig`) with 60s TTL using `STREAM_TOKEN_SECRET`.
+  - `verifyStreamToken`: Enforces constant-time `crypto.timingSafeEqual`, timestamp expiration, and strict link binding.
+  - `claimViewerSlot`: Executes exact atomic SQL update pattern mandated by CONTRACT §6 (`UPDATE share_links SET viewers_used = viewers_used + 1 WHERE id = $1 AND status = 'active' AND viewers_used < max_viewers AND (expires_at IS NULL OR expires_at > now()) RETURNING viewers_used, max_viewers`).
+    - Successfully claims unique slots with race-free concurrency.
+    - Transitions link status to `viewers_exhausted` when limit is reached.
+    - Returning viewers with valid `rl_vs` cookie session do not consume additional slots.
+  - `verifyLinkPasscode`: Compares Argon2id passcode hash with 5-attempt / 15-minute lockout window via `checkRateLimit`.
+  - `getRewrittenPlaylist`: Parses HLS master playlist and rewrites segment URLs to `/api/v/:slug/seg/:file?t=${token}` with `Cache-Control: private, no-store`.
+  - `getSegmentPath`: Validates filename against path traversal and resolves `.ts` segments from active rendition.
+- **Public & Streaming Endpoints**:
+  - `GET /api/v/:slug`: Returns public metadata and state without leaking editor details, internal IDs, or Drive info.
+  - `POST /api/v/:slug/open`: Verifies passcode, atomically claims viewer slot, sets `rl_vs` httpOnly cookie, and issues initial 60s stream token.
+  - `POST /api/v/:slug/token`: Refreshes 60s stream token every 40s; immediately cuts off revoked or expired links.
+  - `GET /api/v/:slug/playlist.m3u8?t=`: Serves token-rewritten HLS playlist with no-store headers.
+  - `GET /api/v/:slug/seg/:file?t=`: Verifies token, session binding, and live DB status on every segment request.
+  - `GET /api/v/:slug/preview-download`: Serves watermarked preview MP4 only when `allowPreviewDownload` is true.
+- **Verification (`scripts/test-b5-streaming.ts`)**:
+  - 17/17 tests passing: valid token, 60s expiration 403 rejection, link A token rejected on link B, tampered signature rejection, 5-attempt passcode lockout, 50 parallel opens with `max_viewers=1` yielding exactly 1 success and 49 rejections, returning cookie session non-consumption, and mid-playback revocation enforcement.
 
 ---
 
