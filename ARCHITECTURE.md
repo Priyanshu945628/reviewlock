@@ -138,7 +138,25 @@ This document tracks system components, topological boundaries, data flow, and s
   - `app/page.tsx`: Landing page (DESIGN §6.1) featuring left-aligned hero, animated timeline graphic, 3-step workflow (`01 02 03`), and trust strip.
   - `app/login/page.tsx` & `app/signup/page.tsx`: Split layout (DESIGN §6.2) with 480px left panel on `--surface-1`, hero graphic on right, inline validation, and password visibility toggle.
   - `app/(editor)/projects/page.tsx`: Dashboard (DESIGN §6.3) featuring filter chips (`All`, `Processing`, `Ready`, `Awaiting payment`, `Paid`), Grid / List view switcher (56px table rows), 6-card skeleton loading state, inline error state with retry, and empty state with embedded dropzone.
-  - `app/(editor)/links/page.tsx`, `activity/page.tsx`, `settings/page.tsx`: Dedicated secondary screens supporting the complete navigation architecture.
+### B2 — Upload Pipeline & Storage Quota
+- **Storage & Disk Quota Guard (`lib/storage/quota.ts`)**:
+  - `checkStorageLimits`: Checks user storage usage against `MAX_STORAGE_PER_USER_GB` (CONTRACT §4.0) and rejects with `STORAGE_QUOTA_EXCEEDED` if exceeded.
+  - File size validator checking against `MAX_UPLOAD_GB` with `FILE_TOO_LARGE` rejection.
+  - Disk space guard using Node.js `statfs` on `DATA_DIR` to ensure 2x file size temporary space for chunk assembly and transcode buffer, rejecting with `INSUFFICIENT_SERVER_SPACE` if disk is constrained.
+- **Probe Subsystem (`lib/video/probe.ts`)**:
+  - FFprobe subprocess inspector extracting video stream properties (`codec_type === 'video'`), dimensions (`width`, `height`), and duration (`durationSeconds`).
+  - Rejects non-video files or corrupted media streams with diagnostic errors.
+- **Background Job Enqueuer (`lib/queue/boss.ts`)**:
+  - Configures pg-boss job queue singleton (`process-project` queue) with retry limits and 1-hour expiration.
+  - Enqueues project processing payload upon verified chunk assembly completion.
+- **Route Handlers**:
+  - `GET /api/me/storage`: Authenticated endpoint returning user's `usedBytes` and configured quota `limitBytes`.
+  - `POST /api/uploads`: Initiates upload session, verifies allowed extensions (`.mp4`, `.mov`, `.mkv`, `.webm`, `.mxf`), enforces quotas, creates database records for project (`uploading`) and upload session (8 MiB chunks), and creates temp directory on `DATA_DIR`.
+  - `PUT /api/uploads/:id/chunk?index=n`: Receives binary chunk parts, persists them to disk (`chunk_${index}.part`), and atomically updates `received_chunks_json` with keyed mutex lock preventing race condition data loss during concurrent uploads.
+  - `GET /api/uploads/:id`: Returns upload session status, total size, chunk size, and array of received chunk indices for client-side drop resume.
+  - `POST /api/uploads/:id/complete`: Validates that all chunks are present, streams sequential chunk assembly into single file, verifies byte size, cleans up part files, executes `ffprobe` verification, transitions project to `uploaded`, and enqueues pg-boss worker job.
+- **Verification (`scripts/test-b2-uploads.ts`)**:
+  - Automated test suite verifying initial quota retrieval, non-video extension rejection, oversize rejection, user quota exhaustion, chunk resumption after drop, concurrent chunk uploads without race loss, real video assembly with FFprobe metadata extraction, and non-video payload rejection (`INVALID_VIDEO`).
 
 ---
 

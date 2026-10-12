@@ -141,3 +141,5 @@ export async function getSessionUserFromRequest(
   if (!token) return null;
   return validateSessionToken(token);
 }
+
+export const getSessionFromCookie = getSessionUserFromRequest;

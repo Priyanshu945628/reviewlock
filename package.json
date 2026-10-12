@@ -14,7 +14,8 @@
     "drive:token": "tsx scripts/get-drive-token.ts",
     "drive:smoke": "tsx scripts/drive-smoke-test.ts",
     "test:contracts": "tsx scripts/test-b0-contracts.ts",
-    "test:auth": "tsx --env-file=.env scripts/test-b1-auth.ts"
+    "test:auth": "tsx --env-file=.env scripts/test-b1-auth.ts",
+    "test:uploads": "tsx --env-file=.env scripts/test-b2-uploads.ts"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.3.0",

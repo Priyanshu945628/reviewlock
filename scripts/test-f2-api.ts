@@ -56,7 +56,7 @@ async function runF2Tests() {
   console.log("\n--> 5. Testing api.links.listByProject & create...");
   const links = await api.links.listByProject("proj_wedding_reel");
   assert.strictEqual(links.ok, true);
-  assert.strictEqual(links.data?.links.length >= 1, true);
+  assert.strictEqual((links.data?.links.length ?? 0) >= 1, true);
   console.log(`✓ Links for proj_wedding_reel returned ${links.data?.links.length} links`);
 
   const createLinkRes = await api.links.create("proj_wedding_reel", {
