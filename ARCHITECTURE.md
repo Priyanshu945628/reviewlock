@@ -155,8 +155,33 @@ This document tracks system components, topological boundaries, data flow, and s
   - `PUT /api/uploads/:id/chunk?index=n`: Receives binary chunk parts, persists them to disk (`chunk_${index}.part`), and atomically updates `received_chunks_json` with keyed mutex lock preventing race condition data loss during concurrent uploads.
   - `GET /api/uploads/:id`: Returns upload session status, total size, chunk size, and array of received chunk indices for client-side drop resume.
   - `POST /api/uploads/:id/complete`: Validates that all chunks are present, streams sequential chunk assembly into single file, verifies byte size, cleans up part files, executes `ffprobe` verification, transitions project to `uploaded`, and enqueues pg-boss worker job.
-- **Verification (`scripts/test-b2-uploads.ts`)**:
-  - Automated test suite verifying initial quota retrieval, non-video extension rejection, oversize rejection, user quota exhaustion, chunk resumption after drop, concurrent chunk uploads without race loss, real video assembly with FFprobe metadata extraction, and non-video payload rejection (`INVALID_VIDEO`).
+### B3 — Processing Worker (FFmpeg & pg-boss)
+- **FFmpeg Transcoding & Watermarking Engine (`lib/video/ffmpeg.ts`)**:
+  - `generatePreviewHls`: Renders 4s H.264 segments (`-hls_time 4 -hls_playlist_type vod`), scales to `PREVIEW_MAX_HEIGHT`, encodes 128k AAC audio, burns in drawtext watermark text with cross-platform font resolution (Windows Arial/Segoe, Linux DejaVu/FreeSans/Liberation), and outputs `master.m3u8` playlist.
+  - `generatePreviewMp4`: Renders standalone watermarked preview MP4 with `faststart` for client preview downloads.
+  - `generateThumbnailSprite`: Extracts 10 frames across video duration tiled horizontally (`tile=10x1`, 160x90 per frame) into `sprite.jpg` and generates corresponding WebVTT index `thumbs.vtt`.
+- **Worker Execution Subsystem (`lib/queue/worker.ts`, `scripts/worker.ts`)**:
+  - `startWorker`: pg-boss worker registered on `process-project` queue with `batchSize: 2` (max 2 concurrent jobs).
+  - Project processing pipeline:
+    1. Sets `projects.status = 'processing'`.
+    2. Probes metadata (duration, width, height).
+    3. Generates default 60s HLS preview cut (rendition version 1).
+    4. Generates preview MP4 (rendition version 1).
+    5. Generates 10-frame thumbnail sprite and VTT.
+    6. Uploads master original to Google Drive via `getStorageProvider().putOriginal()`.
+    7. Verifies MD5 checksum and byte size match local source.
+    8. Deletes local original file from `/data/uploads/` to reclaim server disk space.
+    9. Transitions `projects.status = 'ready'`, sets `drive_file_id` and `drive_md5`.
+    10. Atomically increments `users.storage_used_bytes` by original file size.
+    11. Writes `project_processed` event to `audit_log`.
+    12. On failure, transitions status to `failed` and records error in `audit_log`.
+- **Project Endpoints (`app/api/projects/[id]/`, `thumbs/`)**:
+  - `GET /api/projects/:id`: Returns project detail, status, and associated renditions.
+  - `PATCH /api/projects/:id`: Renames project title.
+  - `DELETE /api/projects/:id`: Deletes project from database, deletes original file from Google Drive via storage provider, decrements user storage quota, and logs to `audit_log`.
+  - `GET /api/projects/:id/thumbs`: Serves thumbnail sprite JPEG (`?image=true`), WebVTT text (`?vtt=true`), or JSON metadata.
+- **Verification (`scripts/test-b3-worker.ts`)**:
+  - Automated test suite verifying HLS generation (master playlist + TS segments), preview MP4 generation, thumbnail sprite + WebVTT generation, end-to-end `processProjectJob` execution (ready status, Drive upload, local cleanup, storage increment, audit log), and failure transitions on missing files.
 
 ---
 
