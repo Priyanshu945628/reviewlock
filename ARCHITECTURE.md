@@ -204,6 +204,25 @@ This document tracks system components, topological boundaries, data flow, and s
     - Danger zone with `Delete project` action protected by `ConfirmDialog`.
 - **Project Preview Endpoint (`app/api/projects/[id]/preview/route.ts`)**:
   - Authenticated route streaming owner's watermarked preview video with HTTP 206 `Accept-Ranges` support for smooth scrubbing.
+### B4 — Share Link Engine
+- **Service & State Machine (`lib/links/service.ts`)**:
+  - `generateSlug`: Generates cryptographically secure 128-bit random base64url slug (16 bytes entropy, 22 characters).
+  - Passcode Security: Hashes passcodes with Argon2id (`memoryCost: 19456`, `timeCost: 2`, `parallelism: 1`).
+  - State Machine (`isValidStateTransition`): Enforces `created -> active -> viewers_exhausted | expired | revoked -> unlocked`.
+    - Revoked links are immutable and reject further modifications (`CANNOT_MODIFY_REVOKED_LINK`).
+    - Editor can unlock to release full file from ANY state (CONTRACT §6).
+    - Prevents illegal backward transitions (e.g., `revoked -> active`, `unlocked -> active`).
+  - Preview Pipeline Re-run (`rerunPreviewPipeline`): Changing `previewStart`, `previewEnd`, or `watermarkText` automatically generates a new rendition version (`v${nextVersion}`) while preserving previous rendition until ready (CONTRACT §7).
+  - Audit Logging: Every state transition and mutation writes to `audit_log` (`link_created`, `link_updated`, `link_revoked`, `link_unlocked`, `rendition_regenerated`).
+- **REST Endpoints**:
+  - `POST /api/projects/:id/links`: Creates link with initial active state, hashed passcode, and audit log.
+  - `GET /api/projects/:id/links`: Lists all share links for a project belonging to authenticated editor.
+  - `PATCH /api/links/:id`: Updates client label, visibility, passcode, preview range, and watermark (re-triggers preview pipeline if range/watermark modified).
+  - `POST /api/links/:id/revoke`: Revokes access; sets status to `revoked`.
+  - `POST /api/links/:id/unlock`: Releases original file; sets status to `unlocked` and records `unlocked_at`.
+  - `GET /api/links/:id/activity`: Returns audit log events and viewer session records for timeline rendering.
+- **Verification (`scripts/test-b4-links.ts`)**:
+  - 42/42 tests passing: 128-bit slug uniqueness and entropy, Argon2id verification, complete legal and illegal state machine transition matrix, database operations, revocation protection, and activity logging.
 
 ---
 

@@ -17,6 +17,7 @@
     "test:auth": "tsx --env-file=.env scripts/test-b1-auth.ts",
     "test:uploads": "tsx --env-file=.env scripts/test-b2-uploads.ts",
     "test:worker": "tsx --env-file=.env scripts/test-b3-worker.ts",
+    "test:links": "tsx --env-file=.env scripts/test-b4-links.ts",
     "worker": "tsx --env-file=.env scripts/worker.ts"
   },
   "dependencies": {
