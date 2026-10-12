@@ -188,9 +188,21 @@ export async function POST(
       });
     } catch (queueErr) {
       console.warn(
-        "[UploadComplete] Could not enqueue job immediately (may run in worker):",
+        "[UploadComplete] Could not enqueue job via pg-boss; executing in background directly:",
         queueErr
       );
+      if (process.env.NODE_ENV !== "production") {
+        import("@/lib/queue/worker").then(({ processProjectJob }) => {
+          processProjectJob({
+            projectId: record.projectId,
+            uploadId,
+            originalPath: assembledFilePath,
+            originalFilename: record.originalFilename,
+          }).catch((err) =>
+            console.error("[DevWorker] Direct processing failed:", err)
+          );
+        });
+      }
     }
 
     return NextResponse.json({

@@ -24,8 +24,8 @@ export async function GET(req: NextRequest) {
     .from(projects)
     .where(eq(projects.userId, userId));
 
-  const projectIds = userProjects.map((p) => p.id);
-  const projectTitleMap = new Map(userProjects.map((p) => [p.id, p.title]));
+  const projectIds = userProjects.map((p: any) => p.id);
+  const projectTitleMap = new Map(userProjects.map((p: any) => [p.id, p.title]));
 
   // 2. Find all link IDs for these projects
   let linkIds: string[] = [];
@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
       .from(shareLinks)
       .where(inArray(shareLinks.projectId, projectIds));
 
-    linkIds = userLinks.map((l) => l.id);
+    linkIds = userLinks.map((l: any) => l.id);
     for (const l of userLinks) {
       linkLabelMap.set(l.id, l.clientLabel || "Client");
     }
@@ -64,7 +64,7 @@ export async function GET(req: NextRequest) {
     .limit(50);
 
   // 4. Format into user-friendly timeline items
-  const activities = logs.map((entry) => {
+  const activities = logs.map((entry: any) => {
     let title = "System Event";
     let detail = `Action ${entry.action} on ${entry.entity}`;
 
