@@ -23,6 +23,7 @@ import {
   Skeleton,
   Logo,
 } from "@/components/ui";
+import { ShareLinkDrawer } from "@/components/share/share-link-drawer";
 import { Film, Sparkles, AlertTriangle, Trash2, FolderPlus } from "lucide-react";
 
 export default function DevComponentsPage() {
@@ -32,6 +33,7 @@ export default function DevComponentsPage() {
 
   // Drawer state
   const [drawerOpen, setDrawerOpen] = React.useState(false);
+  const [shareDrawerOpen, setShareDrawerOpen] = React.useState(false);
 
   // TimelineRangeSelector state
   const [rangeStart, setRangeStart] = React.useState(0);
@@ -420,11 +422,19 @@ export default function DevComponentsPage() {
             </Button>
 
             <Button
-              variant="primary"
+              variant="secondary"
               size="sm"
               onClick={() => setDrawerOpen(true)}
             >
-              Open 480px Drawer
+              Open Primitives Drawer
+            </Button>
+
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setShareDrawerOpen(true)}
+            >
+              Open ShareLinkDrawer (Chunk F4)
             </Button>
           </div>
 
@@ -549,6 +559,14 @@ export default function DevComponentsPage() {
           />
         </div>
       </Drawer>
+
+      {/* Complete ShareLinkDrawer Demo (Chunk F4) */}
+      <ShareLinkDrawer
+        open={shareDrawerOpen}
+        onOpenChange={setShareDrawerOpen}
+        projectId="demo-project-01"
+        projectDurationSeconds={252}
+      />
     </div>
   );
 }

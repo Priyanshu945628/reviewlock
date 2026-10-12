@@ -36,6 +36,7 @@ import {
 import { formatBytes, formatTimecode, formatRelative } from "@/lib/format";
 import { api } from "@/lib/api";
 import { MockProject, MockShareLink } from "@/lib/mocks/data";
+import { ShareLinkDrawer } from "@/components/share/share-link-drawer";
 import { cn } from "@/lib/utils";
 
 export default function ProjectDetailPage() {
@@ -55,6 +56,10 @@ export default function ProjectDetailPage() {
   const [isEditingTitle, setIsEditingTitle] = React.useState(false);
   const [titleDraft, setTitleDraft] = React.useState("");
   const [isSavingTitle, setIsSavingTitle] = React.useState(false);
+
+  // Share link drawer state
+  const [showShareDrawer, setShowShareDrawer] = React.useState(false);
+  const [editingLink, setEditingLink] = React.useState<MockShareLink | null>(null);
 
   // Delete project dialog
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
@@ -399,7 +404,10 @@ export default function ProjectDetailPage() {
                     <Button
                       variant="primary"
                       size="sm"
-                      onClick={() => alert("Open Share Link Drawer (Chunk F4)")}
+                      onClick={() => {
+                        setEditingLink(null);
+                        setShowShareDrawer(true);
+                      }}
                       className="mt-2"
                     >
                       + Create share link
@@ -453,7 +461,7 @@ export default function ProjectDetailPage() {
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-2 shrink-0">
+                          <div className="flex items-center gap-1.5 shrink-0">
                             <Button
                               variant="ghost"
                               size="sm"
@@ -463,6 +471,36 @@ export default function ProjectDetailPage() {
                               <ExternalLink className="w-3.5 h-3.5" />
                               <span className="hidden sm:inline ml-1">Open</span>
                             </Button>
+
+                            {link.status !== "revoked" && (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setEditingLink(link);
+                                    setShowShareDrawer(true);
+                                  }}
+                                  title="Edit link settings"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                  <span className="hidden sm:inline ml-1">Edit</span>
+                                </Button>
+
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={async () => {
+                                    await api.links.revoke(link.id);
+                                    loadProjectData();
+                                  }}
+                                  className="text-text-muted hover:text-danger hover:bg-danger-soft"
+                                  title="Revoke access"
+                                >
+                                  <span className="text-xs">Revoke</span>
+                                </Button>
+                              </>
+                            )}
                           </div>
                         </div>
 
@@ -649,7 +687,10 @@ export default function ProjectDetailPage() {
             <Button
               variant="primary"
               size="lg"
-              onClick={() => alert("Open Share Link Drawer (Chunk F4)")}
+              onClick={() => {
+                setEditingLink(null);
+                setShowShareDrawer(true);
+              }}
               className="w-full gap-2"
             >
               <Plus className="w-4 h-4 stroke-[2.5]" />
@@ -702,6 +743,16 @@ export default function ProjectDetailPage() {
         loading={isReleasing}
         variant="primary"
         onConfirm={handleReleaseFullFile}
+      />
+
+      {/* Share Link Drawer (DESIGN §6.6 & CHUNK F4) */}
+      <ShareLinkDrawer
+        open={showShareDrawer}
+        onOpenChange={setShowShareDrawer}
+        projectId={project.id}
+        projectDurationSeconds={project.durationSeconds || 60}
+        initialLink={editingLink}
+        onSuccess={() => loadProjectData()}
       />
     </div>
   );

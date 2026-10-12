@@ -221,8 +221,33 @@ This document tracks system components, topological boundaries, data flow, and s
   - `POST /api/links/:id/revoke`: Revokes access; sets status to `revoked`.
   - `POST /api/links/:id/unlock`: Releases original file; sets status to `unlocked` and records `unlocked_at`.
   - `GET /api/links/:id/activity`: Returns audit log events and viewer session records for timeline rendering.
-- **Verification (`scripts/test-b4-links.ts`)**:
-  - 42/42 tests passing: 128-bit slug uniqueness and entropy, Argon2id verification, complete legal and illegal state machine transition matrix, database operations, revocation protection, and activity logging.
+### F4 — Share Link Drawer & TimelineRangeSelector
+- **Share Link Drawer (`components/share/share-link-drawer.tsx`)**:
+  - 480px right-sliding drawer conforming strictly to DESIGN §6.6 layout, structure, and 24px section spacing:
+    1. *Who is this for*: `client_label` text input.
+    2. *Preview range*: Integrated `TimelineRangeSelector` with live filmstrip, dragging handles, and summary line.
+    3. *Access*: Segmented control toggling `Private (passcode)` vs `Public (anyone)`. If private: 6-char mono passcode generator with show/hide toggle and copy action.
+    4. *Viewer limit*: Stepper control (`− 1 +`) enforcing minimum 1 viewer slot.
+    5. *Expiry*: Select options: `Never`, `1 hour`, `24 hours`, `7 days`, and `Custom hours`.
+    6. *Preview download*: Switch toggling watermarked preview download permission with explicit clarification that original remains locked.
+    7. *Watermark*: Editable watermark text prefilled with `PREVIEW · NOT PAID` plus live diagonal preview thumbnail.
+  - Sticky footer with secondary "Cancel" and primary "Create link" / "Save changes".
+  - Success State Screen (DESIGN §6.6):
+    - Subtle 360ms amber SVG check draw-in animation (zero confetti).
+    - Big `CopyLinkButton` with URL and one-click copy.
+    - Passcode display card with copy button when private access is configured.
+    - Readout summary cards for range, viewers, and watermark text.
+    - "Done" button to close drawer.
+- **TimelineRangeSelector Component (`components/ui/timeline-range-selector.tsx`)**:
+  - Full-width track, 64px height, radius 10px, background `--surface-2`.
+  - Filmstrip thumbnail background dimmed to 55% opacity.
+  - Modes: `First N seconds` (single amber left-edge handle + quick-pick chips `15s · 30s · 60s · 2m`) and `Custom segment` (two amber handles + draggable body).
+  - Handles: 10px wide × full-height rounded bars with dual grip lines and floating timecode tags. Hit area ≥ 44px for touch accessibility.
+  - Locked region: Darkened 70% with 45° diagonal repeating gradient hatch pattern and centered lock icon when width ≥ 80px.
+  - Keyboard accessible: Handles focusable with Left/Right (1s), Shift+Left/Right (10s), and Home/End snapping.
+- **Wire-up & Showcase**:
+  - Fully wired into Project Detail page (`app/(editor)/projects/[id]/page.tsx`): empty state, right sidebar button, and link row `[Edit]` buttons open the drawer in create or edit mode and refresh link lists on submission.
+  - Fully demonstrated on `/dev/components` showcase page.
 
 ---
 
