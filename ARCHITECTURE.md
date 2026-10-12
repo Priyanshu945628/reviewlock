@@ -284,6 +284,31 @@ This document tracks system components, topological boundaries, data flow, and s
 - **Token Rotation**:
   - Automatically queries `POST /api/v/:slug/token` every 40s to refresh stream token during active sessions. Immediately stops playback if link is revoked.
 
+### B6 + F6 — Payment Gate, Unlock Flow & Live-Piped Download Engine
+- **Unlock Engine & State Machine (CONTRACT §6 & §9)**:
+  - `POST /api/links/:id/unlock`: Authenticated endpoint allowing editors to unlock any share link (transitioning status from `active`, `viewers_exhausted`, or `expired` to `unlocked`).
+  - Sets `unlocked_at = now()` and writes `link_unlocked` event to `audit_log`.
+  - Frontend wired via `ConfirmDialog` in Project Detail page (`app/(editor)/projects/[id]/page.tsx`) matching DESIGN §6.7.
+- **Single-Use Download Tokens (CONTRACT §6 & §9)**:
+  - `lib/download/service.ts`:
+    - `createDownloadToken`: Issues 5-minute single-use download tokens signed with HMAC-SHA256 (`DOWNLOAD_TOKEN_SECRET`). Stores SHA-256 hash in `download_grants` table.
+    - `validateAndConsumeDownloadToken`: Validates cryptographic signature and expiration. Atomically consumes token in database (`UPDATE download_grants SET used_at = now() WHERE id = $1 AND used_at IS NULL`). Rejects expired, tampered, or already-used tokens (`TOKEN_ALREADY_USED`).
+  - `POST /api/v/:slug/download-token`: Public viewer endpoint verifying link status is `unlocked` before issuing single-use token.
+- **Live-Piped Master Download Engine (CONTRACT §4.0.2 & §9)**:
+  - `GET /api/v/:slug/download?d=...`:
+    - Validates and consumes single-use download token.
+    - Streams original master directly from Google Drive via `streamOriginal()` (or local storage fallback).
+    - Transparent HTTP 206 Partial Content Range passthrough (`Content-Range`, `Accept-Ranges: bytes`, `Content-Length`).
+    - Abort signal listener (`req.signal.addEventListener("abort")` & stream cancellation) destroying upstream Drive socket on client disconnect without leaking handles.
+    - Constant flat-memory footprint (`stream.pipeline` / Web ReadableStream chunking), strictly avoiding download-first buffering.
+    - Sets `Content-Disposition: attachment; filename="<sanitized_filename>"`.
+    - Logs `original_downloaded` event with viewer metadata and byte count in `audit_log`.
+- **Frontend Wiring (DESIGN §5, §6.7, §6.8, §6.9)**:
+  - `Sidebar` / `StorageMeter` dynamically wired to `api.storage.getStorageQuota()` (`GET /api/me/storage`).
+  - Viewer page Unlocked State wired with single-use token acquisition, live stream download progress, and error reporting.
+- **Automated Verification**:
+  - `scripts/test-b6-downloads.ts`: 28/28 tests passing (unlock transition, audit log, token signature validation, atomic consumption, replay rejection, tampered signature rejection, expiration rejection, cross-link rejection, byte-identical SHA-256 master verification, HTTP 206 range slicing, client disconnect abort).
+
 ---
 
 ## 3. Contract & Design Deviations (Explicitly Tracked)

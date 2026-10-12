@@ -96,6 +96,38 @@ export default function ClientViewerPage() {
     new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
   );
 
+  // Original video download state (CHUNK B6 + F6)
+  const [isDownloading, setIsDownloading] = React.useState(false);
+  const [downloadError, setDownloadError] = React.useState<string | null>(null);
+
+  const handleDownloadOriginal = async () => {
+    setIsDownloading(true);
+    setDownloadError(null);
+    try {
+      const res = await fetch(`/api/v/${slug}/download-token`, {
+        method: "POST",
+      });
+      const json = await res.json();
+      if (!json.ok || !json.data?.downloadToken) {
+        setDownloadError(
+          json.error?.message || "Failed to generate download token"
+        );
+        setIsDownloading(false);
+        return;
+      }
+
+      const token = json.data.downloadToken;
+      const downloadUrl = `/api/v/${slug}/download?d=${encodeURIComponent(token)}`;
+      window.location.href = downloadUrl;
+      setTimeout(() => {
+        setIsDownloading(false);
+      }, 3000);
+    } catch {
+      setDownloadError("Download request failed. Please try again.");
+      setIsDownloading(false);
+    }
+  };
+
   // 1. Initial Link Fetch
   const fetchLinkMeta = React.useCallback(async () => {
     if (!slug) return;
@@ -639,16 +671,21 @@ export default function ClientViewerPage() {
               </div>
             </div>
 
+            {downloadError && (
+              <p className="text-xs text-danger font-medium text-center">
+                {downloadError}
+              </p>
+            )}
+
             <Button
               variant="primary"
               size="lg"
-              onClick={() => {
-                window.location.href = `/api/v/${slug}/download`;
-              }}
+              loading={isDownloading}
+              onClick={handleDownloadOriginal}
               className="w-full gap-2 text-sm font-semibold"
             >
               <Download className="w-4 h-4 stroke-[2.5]" />
-              Download full video
+              {isDownloading ? "Streaming master file..." : "Download full video"}
             </Button>
           </div>
         </main>

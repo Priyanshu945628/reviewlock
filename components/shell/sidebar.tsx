@@ -47,6 +47,32 @@ export function Sidebar({
   const displayName = user?.displayName || "Editor";
   const avatarLetter = displayName.charAt(0).toUpperCase();
 
+  const [storage, setStorage] = React.useState<{
+    usedBytes: number;
+    limitBytes: number;
+  }>({
+    usedBytes: 0,
+    limitBytes: 20 * 1024 * 1024 * 1024,
+  });
+
+  React.useEffect(() => {
+    let mounted = true;
+    async function loadStorage() {
+      try {
+        const res = await api.storage.getStorageQuota();
+        if (mounted && res.ok && res.data) {
+          setStorage(res.data);
+        }
+      } catch {
+        // Fallback gracefully
+      }
+    }
+    loadStorage();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   return (
     <>
       {/* Desktop & Tablet Sidebar (>= 768px) */}
@@ -115,15 +141,15 @@ export function Sidebar({
           {/* Storage Meter */}
           <div className="hidden xl:block">
             <StorageMeter
-              usedBytes={6.2 * 1024 * 1024 * 1024}
-              limitBytes={20 * 1024 * 1024 * 1024}
+              usedBytes={storage.usedBytes}
+              limitBytes={storage.limitBytes}
               collapsed={false}
             />
           </div>
           <div className="xl:hidden flex justify-center">
             <StorageMeter
-              usedBytes={6.2 * 1024 * 1024 * 1024}
-              limitBytes={20 * 1024 * 1024 * 1024}
+              usedBytes={storage.usedBytes}
+              limitBytes={storage.limitBytes}
               collapsed={true}
             />
           </div>
