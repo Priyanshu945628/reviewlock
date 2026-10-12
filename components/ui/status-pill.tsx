@@ -10,6 +10,7 @@ export type StatusPillType =
   | "live"
   | "viewed"
   | "exhausted"
+  | "viewers_exhausted"
   | "expired"
   | "revoked"
   | "failed"
@@ -44,6 +45,7 @@ export function StatusPill({
       case "unlocked":
         return <Check className="w-2.5 h-2.5 text-success stroke-[3]" />;
       case "exhausted":
+      case "viewers_exhausted":
       case "expired":
         return (
           <span className="inline-block w-1.5 h-1.5 rounded-full border border-text-faint bg-transparent" />
@@ -80,6 +82,7 @@ export function StatusPill({
       case "viewed":
         return "text-info bg-info-soft border-info/20";
       case "exhausted":
+      case "viewers_exhausted":
       case "expired":
         return "text-text-faint bg-surface-2 border-border";
       case "ready":

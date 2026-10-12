@@ -120,8 +120,25 @@ This document tracks system components, topological boundaries, data flow, and s
   - `empty-state.tsx`: Centered icon, title, description, and action button.
   - `skeleton.tsx`: Dark-surface pulse skeleton placeholder matching final component geometries.
   - `logo.tsx`: Wordmark "Review|Lock" with 2px x 18px amber playhead separator.
-- **Showcase & Review**:
-  - `app/dev/components/page.tsx`: Interactive gallery rendering all 20 components across every specified state (default, hover, focus, active, disabled, loading, error). Zero Hard NO violations.
+### F2 — App Shell, Auth Screens, Dashboard & Mock Subsystem
+- **Mock Infrastructure & Typed API Client**:
+  - `lib/mocks/data.ts`: Mock fixtures conforming strictly to DESIGN §12 and CONTRACT §7 (`MOCK_USER` Priyanshu with 6.2 GB / 20 GB quota, 3 `MOCK_PROJECTS`, 2 `MOCK_SHARE_LINKS`).
+  - `lib/api.ts`: Typed client obeying CONTRACT §9 `{ ok, data, error }` schema. Automatically routes to mock fixtures when `NEXT_PUBLIC_USE_MOCKS=true` or `localStorage.getItem('use_mocks') === 'true'`, or makes authenticated `fetch` requests with credentials to backend route handlers.
+  - `scripts/test-f2-api.ts`: Automated test suite verifying typed API methods, filter params, search query parsing, project mutations, and link creation.
+- **Application Shell (`components/shell/`)**:
+  - `sidebar.tsx`: Responsive navigation shell:
+    - Desktop (≥1100px): 232px wide with full wordmark, 36px nav rows, active state with 2px amber bar, StorageMeter, and user profile with logout.
+    - Tablet (768px–1099px): 64px icon rail with playhead logo and compact storage bar.
+    - Mobile (<768px): 56px fixed bottom tab bar with quick navigation.
+  - `top-bar.tsx`: 56px sticky top bar with page title, search bar (shortcut `/`), and primary `+ New upload` button (shortcut `U`).
+  - `storage-meter.tsx`: 4px bar displaying used vs quota bytes in JetBrains Mono; shifts to `--danger` when usage exceeds 90%.
+  - `timeline-hero-graphic.tsx`: CSS/SVG stylised timeline graphic (3 tracks, colored clips, drifting amber playhead at 38%, diagonal hatched locked region with lock icon).
+  - `app/(editor)/layout.tsx`: Editor root shell wrapping sidebar, top bar, and centered responsive content container.
+- **Screen Implementations**:
+  - `app/page.tsx`: Landing page (DESIGN §6.1) featuring left-aligned hero, animated timeline graphic, 3-step workflow (`01 02 03`), and trust strip.
+  - `app/login/page.tsx` & `app/signup/page.tsx`: Split layout (DESIGN §6.2) with 480px left panel on `--surface-1`, hero graphic on right, inline validation, and password visibility toggle.
+  - `app/(editor)/projects/page.tsx`: Dashboard (DESIGN §6.3) featuring filter chips (`All`, `Processing`, `Ready`, `Awaiting payment`, `Paid`), Grid / List view switcher (56px table rows), 6-card skeleton loading state, inline error state with retry, and empty state with embedded dropzone.
+  - `app/(editor)/links/page.tsx`, `activity/page.tsx`, `settings/page.tsx`: Dedicated secondary screens supporting the complete navigation architecture.
 
 ---
 
