@@ -327,6 +327,25 @@ This document tracks system components, topological boundaries, data flow, and s
 - **Automated Verification**:
   - `scripts/test-b7-security.ts`: 38/38 tests passing (cryptographic HMAC verification, tamper rejection, single-use download token replay rejection, 5-try/15-min passcode lockout, multi-pattern log redaction, and live Google Drive root folder permissions audit).
 
+### F7 + B8 — Polish, Notifications, Analytics, Accessibility & Railway Deploy
+- **Optional Client Open Notifications (`lib/notifications/email.ts`)**:
+  - Integrated with Resend API: Asynchronously alerts editors when a client first claims a preview slot.
+  - Fully non-blocking and fire-and-forget; gracefully no-ops when `RESEND_API_KEY` is omitted.
+- **Workspace Analytics & Audit Log Endpoint (`app/api/activity/route.ts`)**:
+  - Aggregates workspace lifecycle events (`project_created`, `link_created`, `viewer_opened`, `link_unlocked`, `original_downloaded`) across editor projects and share links.
+- **Dedicated Management Pages**:
+  - `LinksPage` (`app/(editor)/links/page.tsx`): Real-time list of all active/expired/unlocked share links across all projects with direct copy links, view counts, and status pills.
+  - `ActivityPage` (`app/(editor)/activity/page.tsx`): Real-time audit log timeline (`StatusTimeline`) showing system, viewer, and download activity with relative time formatting.
+  - `SettingsPage` (`app/(editor)/settings/page.tsx`): Editor profile, real storage quota meter with project-by-project disk usage breakdown, and Google Drive vault health status.
+- **Error Boundaries & 404/500 Pages**:
+  - `app/not-found.tsx`: Styled 404 handler with `SearchX` icon and return to dashboard action.
+  - `app/error.tsx`: Global 500 error boundary with error message reporting and recovery actions.
+- **Accessibility & Motion Hardening (DESIGN §14)**:
+  - `@media (prefers-reduced-motion: reduce)` rules in `app/globals.css` eliminating transitions, tick animations, and shimmers for users requesting reduced motion.
+  - Global `:focus-visible` high-contrast amber focus rings (`outline: 2px solid var(--accent); outline-offset: 2px`).
+- **Production Deployment Guide**:
+  - Comprehensive `DEPLOY.md` documenting prerequisites, volume mount at `/data`, PostgreSQL connection, Google Cloud production consent requirements, and post-deploy verification.
+
 ---
 
 ## 3. Contract & Design Deviations (Explicitly Tracked)

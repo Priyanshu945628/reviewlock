@@ -8,6 +8,7 @@ import { db } from "@/lib/db";
 import {
   shareLinks,
   projects,
+  users,
   renditions,
   viewerSessions,
   auditLog,
@@ -16,6 +17,7 @@ import { eq, and, sql, desc } from "drizzle-orm";
 import { env } from "@/lib/env";
 import { checkRateLimit } from "@/lib/auth/rate-limit";
 import { verifyPassword } from "@/lib/auth/password";
+import { sendClientOpenedNotification } from "@/lib/notifications/email";
 
 export const VIEWER_COOKIE_NAME = "rl_vs";
 
@@ -295,6 +297,35 @@ export async function claimViewerSlot(params: {
       maxViewers: row.max_viewers,
     },
   });
+
+  // 6. Optional email notification to editor via Resend
+  (async () => {
+    try {
+      const [linkInfo] = await db
+        .select({
+          clientLabel: shareLinks.clientLabel,
+          slug: shareLinks.slug,
+          projectTitle: projects.title,
+          userEmail: users.email,
+        })
+        .from(shareLinks)
+        .innerJoin(projects, eq(shareLinks.projectId, projects.id))
+        .innerJoin(users, eq(projects.userId, users.id))
+        .where(eq(shareLinks.id, linkId))
+        .limit(1);
+
+      if (linkInfo && linkInfo.userEmail) {
+        await sendClientOpenedNotification({
+          editorEmail: linkInfo.userEmail,
+          clientLabel: linkInfo.clientLabel || "Client",
+          projectTitle: linkInfo.projectTitle,
+          slug: linkInfo.slug,
+        });
+      }
+    } catch {
+      // Fire-and-forget; never block the viewer response
+    }
+  })();
 
   return { ok: true, claimed: true, sessionId };
 }

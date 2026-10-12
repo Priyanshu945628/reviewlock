@@ -258,4 +258,59 @@ export const api = {
       });
     },
   },
+
+  activity: {
+    list: async (): Promise<
+      ApiResponse<{
+        activities: Array<{
+          id: string;
+          title: string;
+          detail: string;
+          action: string;
+          entity: string;
+          timestamp: string;
+          status: string;
+        }>;
+      }>
+    > => {
+      if (isUseMocks()) {
+        return {
+          ok: true,
+          data: {
+            activities: [
+              {
+                id: "act-1",
+                title: "Original Released",
+                detail: "Priyanshu released master original for Studio Kala – Promo.",
+                action: "link_unlocked",
+                entity: "share_link",
+                timestamp: new Date(Date.now() - 10 * 60000).toISOString(),
+                status: "completed",
+              },
+              {
+                id: "act-2",
+                title: "Client Slot Claimed",
+                detail: "Rahul opened Wedding Reel preview. Slot 1/1 claimed.",
+                action: "viewer_opened",
+                entity: "share_link",
+                timestamp: new Date(Date.now() - 45 * 60000).toISOString(),
+                status: "completed",
+              },
+            ],
+          },
+        };
+      }
+      return request<{
+        activities: Array<{
+          id: string;
+          title: string;
+          detail: string;
+          action: string;
+          entity: string;
+          timestamp: string;
+          status: string;
+        }>;
+      }>("/api/activity");
+    },
+  },
 };
