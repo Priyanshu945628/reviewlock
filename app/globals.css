@@ -43,3 +43,18 @@ body {
   margin: 0;
   -webkit-font-smoothing: antialiased;
 }
+
+@layer utilities {
+  @keyframes playhead-tick {
+    0% {
+      left: -25%;
+    }
+    100% {
+      left: 100%;
+    }
+  }
+
+  .animate-playhead-tick {
+    animation: playhead-tick 1.5s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+  }
+}

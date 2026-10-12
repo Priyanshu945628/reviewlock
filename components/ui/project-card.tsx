@@ -1,0 +1,100 @@
+"use client";
+
+import * as React from "react";
+import Link from "next/link";
+import { MoreVertical, Film } from "lucide-react";
+import { StatusPill, StatusPillType } from "./status-pill";
+import { Timecode } from "./timecode";
+import { cn } from "@/lib/utils";
+
+export interface ProjectCardProps {
+  id: string;
+  title: string;
+  durationSeconds?: number;
+  durationFormatted?: string;
+  thumbnailUrl?: string | null;
+  status: StatusPillType;
+  statusLabel?: string;
+  metaText?: string;
+  onActionClick?: (e: React.MouseEvent) => void;
+  className?: string;
+}
+
+export function ProjectCard({
+  id,
+  title,
+  durationSeconds,
+  durationFormatted,
+  thumbnailUrl,
+  status,
+  statusLabel,
+  metaText = "0 links · 0 viewed · just now",
+  onActionClick,
+  className,
+}: ProjectCardProps) {
+  return (
+    <div
+      className={cn(
+        "group relative flex flex-col rounded-lg border border-border bg-surface-1 overflow-hidden transition-all duration-fast ease-custom",
+        "hover:border-border-strong hover:-translate-y-0.5 cursor-pointer select-none",
+        className
+      )}
+    >
+      <Link href={`/projects/${id}`} className="flex flex-col w-full h-full">
+        {/* 16:9 Thumbnail Area */}
+        <div className="relative aspect-video w-full bg-surface-2 overflow-hidden flex items-center justify-center">
+          {thumbnailUrl ? (
+            <img
+              src={thumbnailUrl}
+              alt={title}
+              className="w-full h-full object-cover transition-transform duration-base group-hover:scale-[1.02]"
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center text-text-faint gap-1.5">
+              <Film className="w-8 h-8 opacity-40" />
+            </div>
+          )}
+
+          {/* Duration chip bottom-right */}
+          {(durationSeconds !== undefined || durationFormatted) && (
+            <div className="absolute bottom-2 right-2 rounded-sm bg-black/70 px-1.5 py-0.5 text-[11px] font-mono tabular-nums text-text backdrop-blur-xs">
+              <Timecode
+                seconds={durationSeconds}
+                timecode={durationFormatted}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Card Body */}
+        <div className="flex flex-col p-3.5 gap-2 flex-grow justify-between">
+          <div className="flex items-start justify-between gap-2">
+            <h3
+              className="text-sm font-semibold text-text truncate max-w-[calc(100%-70px)]"
+              title={title}
+            >
+              {title}
+            </h3>
+            <StatusPill status={status} label={statusLabel} />
+          </div>
+
+          <p className="text-xs text-text-muted truncate">{metaText}</p>
+        </div>
+      </Link>
+
+      {/* Action button top-right fades in on hover */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onActionClick?.(e);
+        }}
+        aria-label="Project actions"
+        className="absolute top-2 right-2 flex items-center justify-center w-7 h-7 rounded-md bg-surface-1/90 border border-border text-text-muted hover:text-text opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      >
+        <MoreVertical className="w-4 h-4" />
+      </button>
+    </div>
+  );
+}

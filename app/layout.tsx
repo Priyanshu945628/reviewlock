@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, Bricolage_Grotesque, JetBrains_Mono } from "next/font/google";
+import { Toaster } from "sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
 const inter = Inter({
@@ -38,7 +40,17 @@ export default function RootLayout({
       <body
         className={`${inter.variable} ${bricolage.variable} ${jetbrainsMono.variable} antialiased`}
       >
-        {children}
+        <TooltipProvider>
+          {children}
+          <Toaster
+            theme="dark"
+            position="bottom-right"
+            toastOptions={{
+              className:
+                "!bg-surface-2 !border !border-border !text-text !rounded-md !font-sans",
+            }}
+          />
+        </TooltipProvider>
       </body>
     </html>
   );

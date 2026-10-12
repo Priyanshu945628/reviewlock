@@ -92,7 +92,36 @@ This document tracks system components, topological boundaries, data flow, and s
   - `GET /api/auth/me`: Authenticated profile endpoint returning editor details.
 - **Data Seeding & Verification**:
   - `scripts/seed.ts`: Seed script populating DESIGN §12 content (Editor "Priyanshu", 3 projects: Wedding Reel 4:12, Brand Promo 1:48, Podcast 38:05, and 2 share links: Rahul, Studio Kala).
-  - `scripts/test-b1-auth.ts`: Automated test suite covering Argon2id hashing, rate limiting, session lifecycle, and all auth route handlers.
+### F1 — Design System & Showcase Page
+- **Typography & Token Implementation**:
+  - `app/layout.tsx`: Configured Google Fonts with Next.js font optimization:
+    - Display / Headings: `Bricolage_Grotesque` (weight 600, `--font-bricolage`)
+    - UI / Body: `Inter` (weights 400, 500, 600, `--font-inter`)
+    - Technical / Metrics: `JetBrains_Mono` (weights 400, 500, `--font-jetbrains-mono`, `tabular-nums`)
+  - `app/globals.css`: Dark-only design tokens (`--bg`, `--surface-1` through `--surface-3`, `--border`, `--border-strong`, `--accent` #FFB020, semantic success/danger/info, radiuses max 14px, playhead-tick animation).
+  - `tailwind.config.ts`: Tailwind v3 mapping directly to CSS variables with exact radius limits and custom animation easing.
+- **Formatting Engine**:
+  - `lib/format.ts`: Robust timecode (`mm:ss` or `h:mm:ss`), byte formatter (`B`, `KB`, `MB`, `GB`), and relative time parser (`just now`, `Xm ago`, `Xh ago`, `Xd ago`).
+  - `scripts/test-f1-format.ts`: Comprehensive test suite passing all edge cases (negative, sub-minute, multi-hour, GB bounds).
+- **Core Component Library (`components/ui/`)**:
+  - `button.tsx`: Variants (`primary`, `secondary`, `ghost`, `danger`), sizes (`sm` 32px, `md` 40px, `lg` 48px), fixed-width loading state with variant-aware spinner.
+  - `input.tsx`, `textarea.tsx`, `select.tsx`, `switch.tsx`, `slider.tsx`: Height 40px, `--surface-2` background, 1px border, 2px amber focus outline with offset, label and error states. Built with `@radix-ui` primitives for Switch and Slider.
+  - `status-pill.tsx`: 22px high, 11px uppercase semi-bold with leading dot/check/spinner for all 7 statuses (`processing`, `ready`, `live`, `viewed`, `exhausted`, `revoked`, `paid`/`unlocked`).
+  - `timecode.tsx`: JetBrains Mono tabular-nums wrapper for seconds or pre-formatted timestamps.
+  - `copy-link-button.tsx`: Mono field with copy button, 1.5s checkmark morph, clipboard fallback, and `sonner` toast notification.
+  - `dropzone.tsx`: 220px tall, 14px radius, dashed 1.5px border, drag-over amber highlight, Lucide `Film` icon, and format hint.
+  - `progress-bar.tsx`: 4px tall with `--accent` fill and sliding playhead tick indeterminate animation.
+  - `project-card.tsx`: 16:9 thumbnail, mono duration chip, title truncate, status pill, hover translateY(-2px), and fading kebab menu.
+  - `timeline-range-selector.tsx`: Hero component (§4.9 & §6.6) with dual modes (`First N seconds` and `Custom segment`), quick-pick chips, 10-frame dimmed filmstrip, 45° diagonal hatch on locked regions, floating timecode badges, keyboard navigation, and preview limit warning.
+  - `status-timeline.tsx`: Vertical step sequence with filled, amber-pulsing, and hollow dot indicators.
+  - `confirm-dialog.tsx`: Radix Dialog with backdrop blur, fade/scale animations, 14px radius, and standard/danger actions.
+  - `drawer.tsx`: 480px right-side sheet with slide-in animation, accessible close button, and sticky footer.
+  - `tooltip.tsx`: Radix Tooltip with keyboard shortcut badge support.
+  - `empty-state.tsx`: Centered icon, title, description, and action button.
+  - `skeleton.tsx`: Dark-surface pulse skeleton placeholder matching final component geometries.
+  - `logo.tsx`: Wordmark "Review|Lock" with 2px x 18px amber playhead separator.
+- **Showcase & Review**:
+  - `app/dev/components/page.tsx`: Interactive gallery rendering all 20 components across every specified state (default, hover, focus, active, disabled, loading, error). Zero Hard NO violations.
 
 ---
 
