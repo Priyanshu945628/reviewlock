@@ -262,9 +262,27 @@ This document tracks system components, topological boundaries, data flow, and s
   - `POST /api/v/:slug/token`: Refreshes 60s stream token every 40s; immediately cuts off revoked or expired links.
   - `GET /api/v/:slug/playlist.m3u8?t=`: Serves token-rewritten HLS playlist with no-store headers.
   - `GET /api/v/:slug/seg/:file?t=`: Verifies token, session binding, and live DB status on every segment request.
-  - `GET /api/v/:slug/preview-download`: Serves watermarked preview MP4 only when `allowPreviewDownload` is true.
-- **Verification (`scripts/test-b5-streaming.ts`)**:
-  - 17/17 tests passing: valid token, 60s expiration 403 rejection, link A token rejected on link B, tampered signature rejection, 5-attempt passcode lockout, 50 parallel opens with `max_viewers=1` yielding exactly 1 success and 49 rejections, returning cookie session non-consumption, and mid-playback revocation enforcement.
+### F5 — Client Viewer Page (`/v/[slug]`)
+- **Full-Viewport Custom Video Player (`app/(public)/v/[slug]/page.tsx`)**:
+  - Implements HLS playback via `hls.js` with automatic fallback to native Safari HLS.
+  - Custom UI controls replacing native controls: play/pause, scrub bar with buffered bar indicator, terminal lock icon indicator, mono timecodes (`0:07 / 0:30`), volume/mute, and fullscreen.
+  - Bottom control bar over a 0→black 60% gradient, auto-hiding after 2.5s idle.
+  - Keyboard accessibility: Space/K (play/pause), Left/Right (±5s seek), F (fullscreen), M (mute).
+  - DOM drifting watermark overlay (12% opacity) containing viewer session ID and dynamic timestamp drifting across video bounds.
+  - Video element protected with `controlsList="nodownload"`, `disablePictureInPicture`, and disabled context menu.
+  - Locked End Card: Automatically dims player upon reaching preview end with lock icon, copy: *"That's the end of the preview. The full video is released by the editor after payment."*, and "Watch again" button that does not consume another viewer slot.
+- **State Screens (DESIGN §6.9)**:
+  - *Passcode Modal*: Card with `KeyRound` icon, letter-spaced uppercase passcode input, 300ms error shake animation, and lockout notices.
+  - *Loading State*: Poster skeleton with shimmer animation.
+  - *Preview Not Ready*: Card with spinner and auto-polling until worker processing completes.
+  - *Viewer Limit Reached*: Card with `UsersRound` icon (*"This link has reached its viewer limit"*).
+  - *Expired*: Card with `Clock` icon (*"This link has expired"*).
+  - *Revoked*: Card with `Ban` icon (*"This link is no longer available"*).
+  - *Not Found*: Card with `SearchX` icon (*"We can't find that link"*).
+  - *Unlocked*: Success card with `BadgeCheck` icon, filename, mono size, uncompressed master banner, and **Download full video** button.
+  - *Preview Download*: Dedicated secondary download action when `allowPreviewDownload` is enabled.
+- **Token Rotation**:
+  - Automatically queries `POST /api/v/:slug/token` every 40s to refresh stream token during active sessions. Immediately stops playback if link is revoked.
 
 ---
 
