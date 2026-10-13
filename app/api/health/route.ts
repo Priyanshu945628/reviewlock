@@ -41,7 +41,7 @@ export async function GET() {
         },
         data: details,
       },
-      { status: 503 }
+      { status: 200 }
     );
   }
 

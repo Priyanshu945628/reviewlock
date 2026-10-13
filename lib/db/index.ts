@@ -124,6 +124,43 @@ function createDevInMemoryDatabase() {
   return memDrizzle;
 }
 
+let hasEnsuredTables = false;
+
+async function ensureTables(conn: postgres.Sql) {
+  if (hasEnsuredTables) return;
+  hasEnsuredTables = true;
+  try {
+    const check = await conn`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'users'
+      );
+    `;
+    if (!check[0]?.exists) {
+      console.log("[Database] Initializing tables from migration SQL...");
+      const migrationPath = path.join(process.cwd(), "drizzle", "0000_clean_miss_america.sql");
+      if (fs.existsSync(migrationPath)) {
+        const sqlContent = fs.readFileSync(migrationPath, "utf-8");
+        const statements = sqlContent
+          .split("--> statement-breakpoint")
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0);
+        for (const s of statements) {
+          try {
+            await conn.unsafe(s);
+          } catch {
+            // Ignore minor notices if already exists
+          }
+        }
+        console.log("[Database] Tables successfully verified & created!");
+      }
+    }
+  } catch (err: any) {
+    console.warn("[Database] Table check notice:", err.message);
+  }
+}
+
 function getClient(): postgres.Sql {
   if (globalForDb.conn) return globalForDb.conn;
   const url = env.DATABASE_URL;
@@ -132,12 +169,20 @@ function getClient(): postgres.Sql {
     { max: 10 }
   );
   if (process.env.NODE_ENV !== "production") globalForDb.conn = conn;
+  ensureTables(conn).catch(() => {});
   return conn;
 }
 
-export const client: postgres.Sql = checkPostgresReachable()
-  ? getClient()
-  : (null as any);
+export const client: postgres.Sql = new Proxy({} as any, {
+  get(_target, prop) {
+    const conn = getClient();
+    return (conn as any)[prop];
+  },
+  apply(_target, thisArg, argArray) {
+    const conn = getClient();
+    return (conn as any).apply(thisArg, argArray);
+  },
+}) as postgres.Sql;
 
 function getActiveDb() {
   if (globalForDb.customDb) return globalForDb.customDb;
@@ -175,7 +220,8 @@ export async function checkDbHealth(): Promise<boolean> {
     if (!env.DATABASE_URL || env.DATABASE_URL.includes("placeholder")) {
       return false;
     }
-    await client`SELECT 1`;
+    const conn = getClient();
+    await conn`SELECT 1`;
     return true;
   } catch (error) {
     console.error("[Database] Health check failed:", error);

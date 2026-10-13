@@ -38,8 +38,33 @@ async function request<T>(
       credentials: "include",
     });
 
-    const json = await res.json();
-    return json as ApiResponse<T>;
+    const contentType = res.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      const json = await res.json();
+      return json as ApiResponse<T>;
+    }
+
+    const text = await res.text();
+    console.error(`[API Error] Non-JSON response from ${url} (status ${res.status}):`, text.slice(0, 300));
+
+    let friendlyMessage = `Server error (${res.status}).`;
+    if (res.status === 502) {
+      friendlyMessage = "Server is starting up or restarting (502 Bad Gateway). Please wait 30 seconds and try again.";
+    } else if (res.status === 503) {
+      friendlyMessage = "Service is temporarily unavailable (503). Database may still be connecting.";
+    } else if (res.status === 500) {
+      friendlyMessage = "Internal server error (500). Please check server logs.";
+    } else if (res.status === 404) {
+      friendlyMessage = "The requested endpoint was not found (404).";
+    }
+
+    return {
+      ok: false,
+      error: {
+        code: `HTTP_${res.status}`,
+        message: friendlyMessage,
+      },
+    };
   } catch (err: any) {
     return {
       ok: false,

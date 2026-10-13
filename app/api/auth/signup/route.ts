@@ -13,6 +13,8 @@ const signupSchema = z.object({
   displayName: z.string().min(1, "Display name is required").max(100),
 });
 
+export const dynamic = "force-dynamic";
+
 export async function POST(req: Request) {
   try {
     const ip = req.headers.get("x-forwarded-for")?.split(",")[0].trim() || "127.0.0.1";
