@@ -139,7 +139,16 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
         }),
       });
 
-      const initJson = await initRes.json();
+      let initJson: any;
+      try {
+        initJson = await initRes.json();
+      } catch {
+        const text = await initRes.text().catch(() => "");
+        throw new Error(
+          text.slice(0, 150) || `Server error (${initRes.status}) while starting upload`
+        );
+      }
+
       if (!initJson.ok) {
         throw new Error(initJson.error?.message || "Failed to start upload");
       }
@@ -156,7 +165,12 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
       const resumeRes = await fetch(`/api/uploads/${uploadId}`, {
         credentials: "include",
       });
-      const resumeJson = await resumeRes.json();
+      let resumeJson: any;
+      try {
+        resumeJson = await resumeRes.json();
+      } catch {
+        resumeJson = { data: { receivedChunks: [] } };
+      }
       const receivedChunks: number[] = resumeJson.data?.receivedChunks || [];
       const receivedSet = new Set(receivedChunks);
 
@@ -243,7 +257,15 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
         method: "POST",
         credentials: "include",
       });
-      const completeJson = await completeRes.json();
+      let completeJson: any;
+      try {
+        completeJson = await completeRes.json();
+      } catch {
+        const text = await completeRes.text().catch(() => "");
+        throw new Error(
+          text.slice(0, 150) || `Assembly error (${completeRes.status})`
+        );
+      }
       if (!completeJson.ok) {
         throw new Error(completeJson.error?.message || "Assembly failed");
       }

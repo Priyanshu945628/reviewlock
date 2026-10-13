@@ -3,8 +3,11 @@ set -e
 
 echo "[ReviewLock] Starting container initialization..."
 
-# Ensure volume mount directory exists
-mkdir -p "${DATA_DIR:-/data}"
+# Ensure volume mount directory exists and is writable
+mkdir -p "${DATA_DIR:-/data}" 2>/dev/null || true
+chmod 777 "${DATA_DIR:-/data}" 2>/dev/null || true
+mkdir -p /tmp/reviewlock-data 2>/dev/null || true
+chmod 777 /tmp/reviewlock-data 2>/dev/null || true
 
 # Auto-apply database migrations
 if [ -n "$DATABASE_URL" ]; then

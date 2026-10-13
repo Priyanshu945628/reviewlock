@@ -5,6 +5,7 @@ WORKDIR /app
 # Install system dependencies (FFmpeg is required for video processing)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
+    fonts-freefont-ttf \
     ca-certificates \
     curl \
   && rm -rf /var/lib/apt/lists/*
@@ -39,8 +40,9 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # Create non-root user and data volume directory
 RUN groupadd --system --gid 1001 nodejs && \
     useradd --system --uid 1001 nextjs && \
-    mkdir -p /data && \
-    chown -R nextjs:nodejs /data
+    mkdir -p /data /tmp/reviewlock-data && \
+    chown -R nextjs:nodejs /data /tmp/reviewlock-data && \
+    chmod -R 777 /data /tmp/reviewlock-data
 
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/node_modules ./node_modules

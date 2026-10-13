@@ -6,6 +6,8 @@ import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
+import { getWritableBaseDir } from "./paths";
+
 export interface QuotaCheckResult {
   allowed: boolean;
   code?: "STORAGE_QUOTA_EXCEEDED" | "INSUFFICIENT_SERVER_SPACE" | "FILE_TOO_LARGE";
@@ -53,8 +55,7 @@ export async function checkStorageLimits(
 
   // Check server disk space on DATA_DIR
   try {
-    const dataDir = env.DATA_DIR;
-    await fs.mkdir(dataDir, { recursive: true });
+    const dataDir = await getWritableBaseDir();
 
     // statfs is available on Node 18.15+
     if (typeof fs.statfs === "function") {

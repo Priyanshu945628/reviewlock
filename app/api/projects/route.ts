@@ -3,7 +3,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionFromCookie } from "@/lib/auth/session";
-import { db } from "@/lib/db";
+import { db, ensureDbReady } from "@/lib/db";
 import { projects, shareLinks } from "@/lib/db/schema";
 import { eq, and, ilike, desc, sql } from "drizzle-orm";
 import { formatRelative } from "@/lib/format";
@@ -11,6 +11,7 @@ import { formatRelative } from "@/lib/format";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
+  await ensureDbReady();
   const session = await getSessionFromCookie(req);
   if (!session) {
     return NextResponse.json(

@@ -19,6 +19,7 @@ import {
 } from "@/lib/video/ffmpeg";
 import { probeVideo } from "@/lib/video/probe";
 import { env } from "@/lib/env";
+import { getWritableBaseDir } from "@/lib/storage/paths";
 import {
   getPgBoss,
   PROCESS_PROJECT_QUEUE,
@@ -78,13 +79,14 @@ export async function processProjectJob(
     }
 
     const previewLength = Math.min(60, duration || 60); // Default 60s preview on initial upload (Chunk B3)
+    const baseDir = await getWritableBaseDir();
     const renditionsBaseDir = path.join(
-      env.DATA_DIR,
+      baseDir,
       "renditions",
       projectId,
       "v1"
     );
-    const thumbsBaseDir = path.join(env.DATA_DIR, "thumbs", projectId);
+    const thumbsBaseDir = path.join(baseDir, "thumbs", projectId);
 
     // 3. Generate Preview HLS (4s segments, H.264, PREVIEW_MAX_HEIGHT, AAC, burned-in watermark)
     console.log(`[Worker] Generating HLS preview for ${projectId}...`);

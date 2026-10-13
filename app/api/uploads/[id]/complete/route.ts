@@ -5,17 +5,20 @@ import path from "node:path";
 import { promises as fs, createReadStream, createWriteStream } from "node:fs";
 import { pipeline } from "node:stream/promises";
 import { getSessionFromCookie } from "@/lib/auth/session";
-import { db } from "@/lib/db";
+import { db, ensureDbReady } from "@/lib/db";
 import { uploadSessions, projects } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { probeVideo } from "@/lib/video/probe";
 import { enqueueProcessProject } from "@/lib/queue/boss";
-import { env } from "@/lib/env";
+import { getUploadSessionDir } from "@/lib/storage/paths";
+
+export const dynamic = "force-dynamic";
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  await ensureDbReady();
   const { id: uploadId } = await params;
   const session = await getSessionFromCookie(req);
   if (!session) {
@@ -96,7 +99,7 @@ export async function POST(
     );
   }
 
-  const uploadDir = path.join(env.DATA_DIR, "uploads", uploadId);
+  const uploadDir = await getUploadSessionDir(uploadId);
   const ext = path.extname(record.originalFilename).toLowerCase() || ".mp4";
   const assembledFilePath = path.join(uploadDir, `original${ext}`);
 
