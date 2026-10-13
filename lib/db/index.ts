@@ -125,10 +125,10 @@ function createDevInMemoryDatabase() {
 }
 
 let hasEnsuredTables = false;
+let dbReadyPromise: Promise<void> | null = null;
 
 async function ensureTables(conn: postgres.Sql) {
   if (hasEnsuredTables) return;
-  hasEnsuredTables = true;
   try {
     const check = await conn`
       SELECT EXISTS (
@@ -156,8 +156,21 @@ async function ensureTables(conn: postgres.Sql) {
         console.log("[Database] Tables successfully verified & created!");
       }
     }
+    hasEnsuredTables = true;
   } catch (err: any) {
+    hasEnsuredTables = false;
+    dbReadyPromise = null;
     console.warn("[Database] Table check notice:", err.message);
+  }
+}
+
+export async function ensureDbReady(): Promise<void> {
+  if (checkPostgresReachable()) {
+    const conn = getClient();
+    if (!dbReadyPromise) {
+      dbReadyPromise = ensureTables(conn);
+    }
+    await dbReadyPromise;
   }
 }
 

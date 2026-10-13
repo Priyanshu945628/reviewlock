@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
-import { db } from "@/lib/db";
+import { db, ensureDbReady } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { hashPassword } from "@/lib/auth/password";
 import { createSession, setSessionCookie } from "@/lib/auth/session";
@@ -17,6 +17,7 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   try {
+    await ensureDbReady();
     const ip = req.headers.get("x-forwarded-for")?.split(",")[0].trim() || "127.0.0.1";
     const rateLimit = checkRateLimit(`signup:${ip}`, 10, 15 * 60 * 1000);
     if (!rateLimit.allowed) {
@@ -105,7 +106,7 @@ export async function POST(req: Request) {
         ok: false,
         error: {
           code: "SERVER_ERROR",
-          message: "An error occurred while creating your account.",
+          message: err?.message ? `Failed to create account: ${err.message}` : "An error occurred while creating your account.",
         },
       },
       { status: 500 }

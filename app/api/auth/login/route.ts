@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
-import { db } from "@/lib/db";
+import { db, ensureDbReady } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { verifyPassword } from "@/lib/auth/password";
 import { createSession, setSessionCookie } from "@/lib/auth/session";
@@ -16,6 +16,7 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   try {
+    await ensureDbReady();
     const ip = req.headers.get("x-forwarded-for")?.split(",")[0].trim() || "127.0.0.1";
     const rateLimit = checkRateLimit(`login:${ip}`, 5, 15 * 60 * 1000); // 5 attempts per 15 min per CONTRACT §6
 
@@ -117,7 +118,7 @@ export async function POST(req: Request) {
         ok: false,
         error: {
           code: "SERVER_ERROR",
-          message: "An unexpected error occurred during login.",
+          message: err?.message ? `Login failed: ${err.message}` : "An unexpected error occurred during login.",
         },
       },
       { status: 500 }
