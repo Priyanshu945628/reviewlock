@@ -5,6 +5,7 @@ import { Loader2, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type StatusPillType =
+  | "uploaded"
   | "processing"
   | "ready"
   | "live"

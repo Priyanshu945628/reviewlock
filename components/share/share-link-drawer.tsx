@@ -29,15 +29,33 @@ import {
 } from "@/components/ui";
 import { formatTimecode } from "@/lib/format";
 import { api } from "@/lib/api";
-import { MockShareLink } from "@/lib/mocks/data";
 import { cn } from "@/lib/utils";
+
+export interface ShareLinkData {
+  id?: string;
+  projectId?: string;
+  slug?: string;
+  clientLabel?: string;
+  visibility?: "private" | "public";
+  previewMode?: string;
+  previewStart?: number;
+  previewEnd?: number;
+  maxViewers?: number;
+  viewersUsed?: number;
+  allowPreviewDownload?: boolean;
+  watermarkText?: string;
+  expiresAt?: string | null;
+  status?: string;
+  unlockedAt?: string | null;
+  createdAt?: string;
+}
 
 export interface ShareLinkDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   projectId: string;
   projectDurationSeconds: number;
-  initialLink?: MockShareLink | null;
+  initialLink?: ShareLinkData | null;
   onSuccess?: (createdOrUpdatedLink: any) => void;
 }
 

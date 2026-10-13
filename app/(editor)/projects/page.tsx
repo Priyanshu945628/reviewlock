@@ -22,7 +22,7 @@ import {
 } from "@/components/ui";
 import { formatBytes } from "@/lib/format";
 import { api } from "@/lib/api";
-import { MockProject } from "@/lib/mocks/data";
+import { Project } from "@/lib/types";
 import { useUpload } from "@/components/upload/upload-context";
 import { cn } from "@/lib/utils";
 
@@ -30,7 +30,7 @@ type FilterStatus = "all" | "processing" | "ready" | "awaiting_payment" | "paid"
 
 export default function ProjectsDashboardPage() {
   const { openUploadDialog } = useUpload();
-  const [projects, setProjects] = React.useState<MockProject[]>([]);
+  const [projects, setProjects] = React.useState<Project[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 

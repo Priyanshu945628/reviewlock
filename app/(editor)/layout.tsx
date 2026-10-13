@@ -5,14 +5,13 @@ import { Sidebar } from "@/components/shell/sidebar";
 import { UploadProvider, useUpload } from "@/components/upload/upload-context";
 import { UploadDialog } from "@/components/upload/upload-dialog";
 import { UploadTray } from "@/components/upload/upload-tray";
-import { MOCK_USER } from "@/lib/mocks/data";
 import { api } from "@/lib/api";
 
 function EditorLayoutInner({ children }: { children: React.ReactNode }) {
   const [user, setUser] = React.useState<{
-    displayName: string;
-    email: string;
-  }>(MOCK_USER);
+    displayName?: string;
+    email?: string;
+  } | undefined>(undefined);
 
   const { openUploadDialog } = useUpload();
 

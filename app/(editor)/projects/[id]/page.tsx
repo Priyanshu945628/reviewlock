@@ -35,7 +35,7 @@ import {
 } from "@/components/ui";
 import { formatBytes, formatTimecode, formatRelative } from "@/lib/format";
 import { api } from "@/lib/api";
-import { MockProject, MockShareLink } from "@/lib/mocks/data";
+import { Project, ShareLink } from "@/lib/types";
 import { ShareLinkDrawer } from "@/components/share/share-link-drawer";
 import { cn } from "@/lib/utils";
 
@@ -44,8 +44,8 @@ export default function ProjectDetailPage() {
   const router = useRouter();
   const projectId = (params?.id as string) || "";
 
-  const [project, setProject] = React.useState<MockProject | null>(null);
-  const [links, setLinks] = React.useState<MockShareLink[]>([]);
+  const [project, setProject] = React.useState<Project | null>(null);
+  const [links, setLinks] = React.useState<ShareLink[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -59,14 +59,14 @@ export default function ProjectDetailPage() {
 
   // Share link drawer state
   const [showShareDrawer, setShowShareDrawer] = React.useState(false);
-  const [editingLink, setEditingLink] = React.useState<MockShareLink | null>(null);
+  const [editingLink, setEditingLink] = React.useState<ShareLink | null>(null);
 
   // Delete project dialog
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
 
   // Release full file confirm
-  const [releaseTargetLink, setReleaseTargetLink] = React.useState<MockShareLink | null>(null);
+  const [releaseTargetLink, setReleaseTargetLink] = React.useState<ShareLink | null>(null);
   const [isReleasing, setIsReleasing] = React.useState(false);
 
   // Video player state

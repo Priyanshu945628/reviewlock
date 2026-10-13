@@ -4,10 +4,8 @@ import {
   MOCK_USER,
   MOCK_PROJECTS,
   MOCK_SHARE_LINKS,
-  MockUser,
-  MockProject,
-  MockShareLink,
 } from "@/lib/mocks/data";
+import { User, Project, ShareLink } from "@/lib/types";
 
 export interface ApiResponse<T> {
   ok: boolean;
@@ -59,11 +57,11 @@ export const api = {
       email: string,
       password: string,
       displayName?: string
-    ): Promise<ApiResponse<{ user: MockUser }>> => {
+    ): Promise<ApiResponse<{ user: User }>> => {
       if (isUseMocks()) {
         return { ok: true, data: { user: MOCK_USER } };
       }
-      return request<{ user: MockUser }>("/api/auth/signup", {
+      return request<{ user: User }>("/api/auth/signup", {
         method: "POST",
         body: JSON.stringify({ email, password, displayName }),
       });
@@ -72,11 +70,11 @@ export const api = {
     login: async (
       email: string,
       password: string
-    ): Promise<ApiResponse<{ user: MockUser }>> => {
+    ): Promise<ApiResponse<{ user: User }>> => {
       if (isUseMocks()) {
         return { ok: true, data: { user: MOCK_USER } };
       }
-      return request<{ user: MockUser }>("/api/auth/login", {
+      return request<{ user: User }>("/api/auth/login", {
         method: "POST",
         body: JSON.stringify({ email, password }),
       });
@@ -91,11 +89,11 @@ export const api = {
       });
     },
 
-    me: async (): Promise<ApiResponse<{ user: MockUser }>> => {
+    me: async (): Promise<ApiResponse<{ user: User }>> => {
       if (isUseMocks()) {
         return { ok: true, data: { user: MOCK_USER } };
       }
-      return request<{ user: MockUser }>("/api/auth/me");
+      return request<{ user: User }>("/api/auth/me");
     },
   },
 
@@ -122,7 +120,7 @@ export const api = {
     list: async (params?: {
       search?: string;
       status?: string;
-    }): Promise<ApiResponse<{ projects: MockProject[] }>> => {
+    }): Promise<ApiResponse<{ projects: Project[] }>> => {
       if (isUseMocks()) {
         let results = [...MOCK_PROJECTS];
         if (params?.search) {
@@ -139,12 +137,12 @@ export const api = {
       if (params?.search) searchParams.set("search", params.search);
       if (params?.status) searchParams.set("status", params.status);
 
-      return request<{ projects: MockProject[] }>(
+      return request<{ projects: Project[] }>(
         `/api/projects?${searchParams.toString()}`
       );
     },
 
-    get: async (id: string): Promise<ApiResponse<{ project: MockProject }>> => {
+    get: async (id: string): Promise<ApiResponse<{ project: Project }>> => {
       if (isUseMocks()) {
         const found = MOCK_PROJECTS.find((p) => p.id === id);
         if (!found) {
@@ -155,13 +153,13 @@ export const api = {
         }
         return { ok: true, data: { project: found } };
       }
-      return request<{ project: MockProject }>(`/api/projects/${id}`);
+      return request<{ project: Project }>(`/api/projects/${id}`);
     },
 
     rename: async (
       id: string,
       title: string
-    ): Promise<ApiResponse<{ project: MockProject }>> => {
+    ): Promise<ApiResponse<{ project: Project }>> => {
       if (isUseMocks()) {
         const found = MOCK_PROJECTS.find((p) => p.id === id);
         if (!found) {
@@ -173,7 +171,7 @@ export const api = {
         const updated = { ...found, title };
         return { ok: true, data: { project: updated } };
       }
-      return request<{ project: MockProject }>(`/api/projects/${id}`, {
+      return request<{ project: Project }>(`/api/projects/${id}`, {
         method: "PATCH",
         body: JSON.stringify({ title }),
       });
@@ -194,30 +192,30 @@ export const api = {
   links: {
     listByProject: async (
       projectId: string
-    ): Promise<ApiResponse<{ links: MockShareLink[] }>> => {
+    ): Promise<ApiResponse<{ links: ShareLink[] }>> => {
       if (isUseMocks()) {
         const results = MOCK_SHARE_LINKS.filter(
           (l) => l.projectId === projectId
         );
         return { ok: true, data: { links: results } };
       }
-      return request<{ links: MockShareLink[] }>(
+      return request<{ links: ShareLink[] }>(
         `/api/projects/${projectId}/links`
       );
     },
 
     create: async (
       projectId: string,
-      data: Partial<MockShareLink> & { passcode?: string }
-    ): Promise<ApiResponse<{ link: MockShareLink }>> => {
+      data: Partial<ShareLink> & { passcode?: string }
+    ): Promise<ApiResponse<{ link: ShareLink }>> => {
       if (isUseMocks()) {
-        const newLink: MockShareLink = {
+        const newLink: ShareLink = {
           id: `link_${Date.now()}`,
           projectId,
           slug: Math.random().toString(36).substring(2, 10),
           clientLabel: data.clientLabel || "New Client Link",
           visibility: data.visibility || "public",
-          previewMode: data.previewMode || "first_n",
+          previewMode: data.previewMode || "first_n_seconds",
           previewStart: data.previewStart || 0,
           previewEnd: data.previewEnd || 30,
           maxViewers: data.maxViewers || 1,
@@ -225,13 +223,13 @@ export const api = {
           allowPreviewDownload: data.allowPreviewDownload || false,
           watermarkText: data.watermarkText || "PREVIEW · NOT PAID",
           expiresAt: data.expiresAt || null,
-          status: "live",
+          status: "active",
           unlockedAt: null,
           createdAt: new Date().toISOString(),
         };
         return { ok: true, data: { link: newLink } };
       }
-      return request<{ link: MockShareLink }>(
+      return request<{ link: ShareLink }>(
         `/api/projects/${projectId}/links`,
         {
           method: "POST",
@@ -277,26 +275,7 @@ export const api = {
         return {
           ok: true,
           data: {
-            activities: [
-              {
-                id: "act-1",
-                title: "Original Released",
-                detail: "Priyanshu released master original for Studio Kala – Promo.",
-                action: "link_unlocked",
-                entity: "share_link",
-                timestamp: new Date(Date.now() - 10 * 60000).toISOString(),
-                status: "completed",
-              },
-              {
-                id: "act-2",
-                title: "Client Slot Claimed",
-                detail: "Rahul opened Wedding Reel preview. Slot 1/1 claimed.",
-                action: "viewer_opened",
-                entity: "share_link",
-                timestamp: new Date(Date.now() - 45 * 60000).toISOString(),
-                status: "completed",
-              },
-            ],
+            activities: [],
           },
         };
       }
