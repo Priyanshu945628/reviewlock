@@ -17,6 +17,9 @@ const globalForDb = globalThis as unknown as {
 };
 
 function checkPostgresReachable(): boolean {
+  if (process.env.NEXT_PHASE === "phase-production-build") {
+    return false;
+  }
   if (globalForDb.isPgUp !== undefined) return globalForDb.isPgUp;
   if (process.env.NODE_ENV === "production") {
     globalForDb.isPgUp = true;

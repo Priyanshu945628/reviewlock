@@ -102,10 +102,22 @@ function validateEnv(customEnv?: Record<string, string | undefined>): Env {
   if (process.env.NEXT_PHASE === "phase-production-build") {
     return new Proxy(targetEnv as unknown as Env, {
       get(target, prop) {
-        if (typeof prop === "string" && prop in target) {
+        if (typeof prop === "string" && prop in target && target[prop as keyof Env]) {
           return target[prop as keyof Env];
         }
-        return "placeholder-build-value";
+        if (prop === "APP_URL") return "http://localhost:3000";
+        if (prop === "DATABASE_URL") return "postgresql://postgres:postgres@127.0.0.1:5432/reviewlock";
+        if (prop === "PORT") return 3000;
+        if (prop === "MAX_UPLOAD_GB") return 5;
+        if (prop === "MAX_STORAGE_PER_USER_GB") return 20;
+        if (prop === "PREVIEW_MAX_HEIGHT") return 720;
+        if (prop === "NODE_ENV") return "production";
+        if (prop === "SESSION_SECRET") return "build-phase-placeholder-session-secret-key-32chars";
+        if (prop === "STREAM_TOKEN_SECRET") return "build-phase-placeholder-stream-secret-key-32chars";
+        if (prop === "DOWNLOAD_TOKEN_SECRET") return "build-phase-placeholder-download-secret-key-32chars";
+        if (prop === "STORAGE_PROVIDER") return "google-drive";
+        if (prop === "GOOGLE_DRIVE_ROOT_FOLDER_ID") return "ReviewLock-Originals";
+        return "build-phase-placeholder";
       },
     });
   }

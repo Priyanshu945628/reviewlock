@@ -7,6 +7,8 @@ import { auditLog, projects, shareLinks } from "@/lib/db/schema";
 import { eq, desc, inArray, or } from "drizzle-orm";
 import { getSessionFromCookie } from "@/lib/auth/session";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(req: NextRequest) {
   const session = await getSessionFromCookie(req);
   if (!session) {
