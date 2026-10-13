@@ -7,7 +7,10 @@ echo "[ReviewLock] Starting container initialization..."
 mkdir -p "${DATA_DIR:-/data}"
 
 # Launch background worker
-if [ -f "worker.js" ]; then
+if [ -f "scripts/worker.ts" ]; then
+  echo "[ReviewLock] Starting background worker via tsx..."
+  npx tsx scripts/worker.ts &
+elif [ -f "worker.js" ]; then
   echo "[ReviewLock] Starting background worker..."
   node worker.js &
 fi

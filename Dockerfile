@@ -12,6 +12,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Dependency installation stage
 FROM base AS deps
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    make \
+    g++ \
+  && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json* ./
 RUN npm ci
 
@@ -41,6 +46,8 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/worker.js ./worker.js
+COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/lib ./lib
 COPY --from=builder /app/start.sh ./start.sh
 
 RUN chmod +x ./start.sh && chown -R nextjs:nodejs /app
