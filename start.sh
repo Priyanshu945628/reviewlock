@@ -6,6 +6,12 @@ echo "[ReviewLock] Starting container initialization..."
 # Ensure volume mount directory exists
 mkdir -p "${DATA_DIR:-/data}"
 
+# Auto-apply database migrations
+if [ -n "$DATABASE_URL" ]; then
+  echo "[ReviewLock] Applying database migrations..."
+  npx drizzle-kit migrate || echo "[ReviewLock] Migration warning: will retry on request..."
+fi
+
 # Launch background worker
 if [ -f "scripts/worker.ts" ]; then
   echo "[ReviewLock] Starting background worker via tsx..."

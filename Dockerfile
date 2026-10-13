@@ -49,6 +49,8 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/worker.js ./worker.js
 COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/lib ./lib
+COPY --from=builder /app/drizzle ./drizzle
+COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts
 COPY --from=builder /app/start.sh ./start.sh
 
 RUN chmod +x ./start.sh && chown -R nextjs:nodejs /app
