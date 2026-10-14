@@ -121,6 +121,20 @@ export default function ProjectDetailPage() {
     loadProjectData();
   }, [loadProjectData]);
 
+  // Auto-poll when project is processing
+  React.useEffect(() => {
+    if (!project || project.status === "ready") return;
+    const interval = setInterval(() => {
+      loadProjectData();
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [project?.status, loadProjectData]);
+
+  const elapsedSec = project?.createdAt
+    ? (Date.now() - new Date(project.createdAt).getTime()) / 1000
+    : 10;
+  const processingPercent = Math.min(94, Math.max(15, Math.round(15 + (elapsedSec / 30) * 75)));
+
   // Rename handler
   const handleSaveTitle = async () => {
     if (!project || !titleDraft.trim() || titleDraft.trim() === project.title) {
@@ -288,12 +302,31 @@ export default function ProjectDetailPage() {
               playsInline
             />
 
-            {/* Video Preparing State Overlay */}
-            {videoError && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-surface-1/95 z-20 gap-2 p-4 text-center">
-                <Loader2 className="w-7 h-7 animate-spin text-accent" />
-                <p className="text-xs font-semibold text-text">Preparing video preview...</p>
-                <p className="text-[11px] text-text-muted">High-speed processing in progress. Preview will play automatically.</p>
+            {/* Video Processing / Preparing State Overlay */}
+            {(videoError || (project && project.status !== "ready")) && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-surface-1/95 z-20 gap-3 p-6 text-center select-none animate-in fade-in">
+                <Loader2 className="w-8 h-8 animate-spin text-accent" />
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-text">
+                    Processing Video Preview · {processingPercent}%
+                  </p>
+                  <p className="text-xs text-text-muted max-w-sm">
+                    {processingPercent < 35
+                      ? "Probing metadata & audio stream channels..."
+                      : processingPercent < 75
+                      ? "Transcoding watermarked 720p HLS stream..."
+                      : "Generating thumbnail scrub sprites and playlists..."}
+                  </p>
+                </div>
+                <div className="w-64 max-w-full h-2 bg-surface-3 rounded-full overflow-hidden mt-1">
+                  <div
+                    className="h-full bg-accent transition-all duration-500 rounded-full"
+                    style={{ width: `${processingPercent}%` }}
+                  />
+                </div>
+                <p className="text-[11px] text-text-faint font-mono">
+                  Auto-refreshes when ready · High-speed queue
+                </p>
               </div>
             )}
 

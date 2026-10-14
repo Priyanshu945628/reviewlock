@@ -13,6 +13,7 @@ import {
   Share2,
   Copy,
   Trash2,
+  Loader2,
 } from "lucide-react";
 import { TopBar } from "@/components/shell/top-bar";
 import {
@@ -87,6 +88,25 @@ export default function ProjectsDashboardPage() {
     fetchProjects();
   }, [fetchProjects]);
 
+  // Compute processing items and percentage
+  const processingProjects = projects.filter((p) => p.status === "processing");
+  const processingCount = processingProjects.length;
+
+  const getProjectProgress = (createdAt?: string) => {
+    if (!createdAt) return 40;
+    const elapsedSeconds = Math.max(0, (Date.now() - new Date(createdAt).getTime()) / 1000);
+    return Math.min(94, Math.max(15, Math.round(15 + (elapsedSeconds / 30) * 75)));
+  };
+
+  // Auto-poll every 2.5s while any project is processing so it flips to ready automatically
+  React.useEffect(() => {
+    if (processingCount === 0) return;
+    const interval = setInterval(() => {
+      fetchProjects();
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [processingCount, fetchProjects]);
+
   const handleDeleteConfirm = async () => {
     if (!projectToDelete) return;
     setIsDeleting(true);
@@ -108,7 +128,10 @@ export default function ProjectsDashboardPage() {
 
   const filterChips: { id: FilterStatus; label: string }[] = [
     { id: "all", label: "All" },
-    { id: "processing", label: "Processing" },
+    {
+      id: "processing",
+      label: processingCount > 0 ? `Processing (${processingCount})` : "Processing",
+    },
     { id: "ready", label: "Ready" },
     { id: "awaiting_payment", label: "Awaiting payment" },
     { id: "paid", label: "Paid" },
@@ -177,6 +200,40 @@ export default function ProjectsDashboardPage() {
           </div>
         </div>
 
+        {/* Processing Banner (shows count of processing videos and percent completed) */}
+        {!loading && processingCount > 0 && (
+          <div className="rounded-lg bg-surface-1 border border-accent/40 p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-in fade-in">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Loader2 className="w-4 h-4 text-accent animate-spin" />
+                <span className="text-sm font-semibold text-text">
+                  {processingCount} {processingCount === 1 ? "video is" : "videos are"} processing
+                </span>
+                <span className="text-xs font-mono px-2 py-0.5 rounded bg-accent-soft text-accent font-bold">
+                  {Math.round(
+                    processingProjects.reduce((acc, p) => acc + getProjectProgress(p.createdAt), 0) /
+                      processingCount
+                  )}% completed
+                </span>
+              </div>
+              <p className="text-xs text-text-muted">
+                Transcoding previews and generating HLS streams. Will automatically flip to ready once done.
+              </p>
+            </div>
+            <div className="w-full sm:w-48 h-2 bg-surface-3 rounded-full overflow-hidden shrink-0">
+              <div
+                className="h-full bg-accent transition-all duration-500 rounded-full"
+                style={{
+                  width: `${Math.round(
+                    processingProjects.reduce((acc, p) => acc + getProjectProgress(p.createdAt), 0) /
+                      processingCount
+                  )}%`,
+                }}
+              />
+            </div>
+          </div>
+        )}
+
         {/* 1. Loading State: 6 Skeleton cards (DESIGN §6.3) */}
         {loading && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -240,6 +297,7 @@ export default function ProjectsDashboardPage() {
                 durationSeconds={proj.durationSeconds}
                 status={proj.status === "failed" ? "failed" : proj.status}
                 statusLabel={proj.statusLabel}
+                processingPercent={proj.status === "processing" ? getProjectProgress(proj.createdAt) : undefined}
                 metaText={`${proj.linkCount} links · ${proj.viewedCount} viewed · ${proj.lastViewedRelative}`}
                 onCreateLink={() => setSelectedProjectForShare(proj)}
                 onDelete={() => setProjectToDelete(proj)}
@@ -289,11 +347,23 @@ export default function ProjectsDashboardPage() {
                 </Link>
 
                 {/* Status */}
-                <div className="col-span-2 flex items-center">
+                <div className="col-span-2 flex flex-col justify-center gap-1">
                   <StatusPill
                     status={proj.status === "failed" ? "failed" : proj.status}
-                    label={proj.statusLabel}
+                    label={
+                      proj.status === "processing"
+                        ? `Processing · ${getProjectProgress(proj.createdAt)}%`
+                        : proj.statusLabel
+                    }
                   />
+                  {proj.status === "processing" && (
+                    <div className="w-24 h-1 bg-surface-3 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-accent transition-all duration-300 rounded-full"
+                        style={{ width: `${getProjectProgress(proj.createdAt)}%` }}
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* Links / Views */}

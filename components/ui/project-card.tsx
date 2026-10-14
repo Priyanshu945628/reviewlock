@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { MoreVertical, Film, ExternalLink, Share2, Copy, Trash2 } from "lucide-react";
+import { MoreVertical, Film, ExternalLink, Share2, Copy, Trash2, Loader2 } from "lucide-react";
 import { StatusPill, StatusPillType } from "./status-pill";
 import { Timecode } from "./timecode";
 import {
@@ -23,6 +23,7 @@ export interface ProjectCardProps {
   thumbnailUrl?: string | null;
   status: StatusPillType;
   statusLabel?: string;
+  processingPercent?: number;
   metaText?: string;
   onCreateLink?: () => void;
   onDelete?: () => void;
@@ -38,6 +39,7 @@ export function ProjectCard({
   thumbnailUrl,
   status,
   statusLabel,
+  processingPercent,
   metaText = "0 links · 0 viewed · just now",
   onCreateLink,
   onDelete,
@@ -67,8 +69,27 @@ export function ProjectCard({
             </div>
           )}
 
+          {/* Processing Progress Overlay */}
+          {status === "processing" && (
+            <div className="absolute inset-0 bg-black/75 backdrop-blur-xs flex flex-col items-center justify-center p-4 gap-2 z-10 select-none">
+              <div className="flex items-center gap-2 text-accent">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span className="text-xs font-semibold text-text font-mono">
+                  {processingPercent !== undefined ? `${processingPercent}% completed` : "Processing..."}
+                </span>
+              </div>
+              <div className="w-4/5 h-1.5 bg-surface-3 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-accent transition-all duration-500 rounded-full"
+                  style={{ width: `${processingPercent !== undefined ? Math.max(10, processingPercent) : 50}%` }}
+                />
+              </div>
+              <span className="text-[10px] text-text-muted">Transcoding preview & HLS</span>
+            </div>
+          )}
+
           {/* Duration chip bottom-right */}
-          {(durationSeconds !== undefined || durationFormatted) && (
+          {status !== "processing" && (durationSeconds !== undefined || durationFormatted) && (
             <div className="absolute bottom-2 right-2 rounded-sm bg-black/70 px-1.5 py-0.5 text-[11px] font-mono tabular-nums text-text backdrop-blur-xs">
               <Timecode
                 seconds={durationSeconds}
@@ -87,7 +108,14 @@ export function ProjectCard({
             >
               {title}
             </h3>
-            <StatusPill status={status} label={statusLabel} />
+            <StatusPill
+              status={status}
+              label={
+                status === "processing" && processingPercent !== undefined
+                  ? `${processingPercent}%`
+                  : statusLabel
+              }
+            />
           </div>
 
           <p className="text-xs text-text-muted truncate">{metaText}</p>

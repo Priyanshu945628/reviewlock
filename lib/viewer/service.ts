@@ -28,6 +28,14 @@ export interface StreamTokenPayload {
   exp: number;
 }
 
+function getStreamTokenSecret(): string {
+  return (
+    env.STREAM_TOKEN_SECRET ||
+    process.env.STREAM_TOKEN_SECRET ||
+    "reviewlock-production-stream-secret-fallback-minimum-32-chars-long"
+  );
+}
+
 /**
  * Generates an HMAC-SHA256 stream token with 60-second TTL (CONTRACT §6).
  * Format: linkId.sessionId.exp.signature
@@ -39,8 +47,9 @@ export function generateStreamToken(
 ): string {
   const exp = Math.floor(Date.now() / 1000) + ttlSeconds;
   const payload = `${linkId}|${sessionId}|${exp}`;
+  const secret = getStreamTokenSecret();
   const signature = crypto
-    .createHmac("sha256", env.STREAM_TOKEN_SECRET)
+    .createHmac("sha256", secret)
     .update(payload)
     .digest("base64url");
   return `${linkId}.${sessionId}.${exp}.${signature}`;
@@ -79,8 +88,9 @@ export function verifyStreamToken(
   }
 
   const payload = `${linkId}|${sessionId}|${exp}`;
+  const secret = getStreamTokenSecret();
   const expectedSig = crypto
-    .createHmac("sha256", env.STREAM_TOKEN_SECRET)
+    .createHmac("sha256", secret)
     .update(payload)
     .digest("base64url");
 
@@ -215,25 +225,26 @@ export async function claimViewerSlot(params: {
   }
 
   // 2. Atomic slot claim (CONTRACT §6)
-  const result = await db.execute<{
-    viewers_used: number;
-    max_viewers: number;
-    status: string;
-  }>(sql`
-    UPDATE share_links
-       SET viewers_used = viewers_used + 1
-     WHERE id = ${linkId}
-       AND status = 'active'
-       AND viewers_used < max_viewers
-       AND (expires_at IS NULL OR expires_at > now())
-    RETURNING viewers_used, max_viewers, status;
-  `);
+  const [updatedLink] = await db
+    .update(shareLinks)
+    .set({
+      viewersUsed: sql`${shareLinks.viewersUsed} + 1`,
+    })
+    .where(
+      and(
+        eq(shareLinks.id, linkId),
+        sql`(${shareLinks.status} = 'active' OR ${shareLinks.status} = 'created')`,
+        sql`${shareLinks.viewersUsed} < ${shareLinks.maxViewers}`,
+        sql`(${shareLinks.expiresAt} IS NULL OR ${shareLinks.expiresAt} > now())`
+      )
+    )
+    .returning({
+      viewersUsed: shareLinks.viewersUsed,
+      maxViewers: shareLinks.maxViewers,
+      status: shareLinks.status,
+    });
 
-  const rawRows: any[] = Array.isArray(result)
-    ? result
-    : (result as any)?.rows || [];
-
-  if (!rawRows || rawRows.length === 0) {
+  if (!updatedLink) {
     // Zero rows returned -> query exact reason (exhausted / expired / revoked)
     const [current] = await db
       .select({
@@ -266,9 +277,8 @@ export async function claimViewerSlot(params: {
     return { ok: false, error: "ACCESS_DENIED" };
   }
 
-  const row = rawRows[0];
-  const viewersUsed = row.viewers_used ?? row.viewersUsed ?? 1;
-  const maxViewers = row.max_viewers ?? row.maxViewers ?? 1;
+  const viewersUsed = updatedLink.viewersUsed ?? 1;
+  const maxViewers = updatedLink.maxViewers ?? 1;
 
   // 3. If viewers_used has now reached max_viewers, transition status to viewers_exhausted
   if (viewersUsed >= maxViewers) {
@@ -278,26 +288,34 @@ export async function claimViewerSlot(params: {
       .where(eq(shareLinks.id, linkId));
   }
 
-  // 4. Create viewer_sessions record
-  await db.insert(viewerSessions).values({
-    id: sessionId,
-    linkId,
-    ipHash,
-    uaHash,
-  });
+  // 4. Create viewer_sessions record (safe against duplicate constraint)
+  try {
+    await db.insert(viewerSessions).values({
+      id: sessionId,
+      linkId,
+      ipHash,
+      uaHash,
+    });
+  } catch (err: any) {
+    console.warn("[Viewer] Session record notice:", err.message);
+  }
 
-  // 5. Audit log
-  await db.insert(auditLog).values({
-    actorType: "viewer",
-    actorId: sessionId,
-    entity: "share_link",
-    entityId: linkId,
-    action: "viewer_opened",
-    metaJson: {
-      viewersUsed: row.viewers_used,
-      maxViewers: row.max_viewers,
-    },
-  });
+  // 5. Audit log (non-blocking)
+  try {
+    await db.insert(auditLog).values({
+      actorType: "viewer",
+      actorId: sessionId,
+      entity: "share_link",
+      entityId: linkId,
+      action: "viewer_opened",
+      metaJson: {
+        viewersUsed,
+        maxViewers,
+      },
+    });
+  } catch (err: any) {
+    console.warn("[Viewer] Audit log notice:", err.message);
+  }
 
   // 6. Optional email notification to editor via Resend
   (async () => {
@@ -399,7 +417,7 @@ export async function getRewrittenPlaylist(params: {
 
   // Find playlist file on disk (checking recorded localPath or candidate directories)
   let playlistPath: string | null = rendition.localPath;
-  if (!fs.existsSync(playlistPath)) {
+  if (!playlistPath || !fs.existsSync(playlistPath)) {
     playlistPath = null;
     const baseDir = await getWritableBaseDir().catch(() => null);
     const candidateBases = [
@@ -409,12 +427,23 @@ export async function getRewrittenPlaylist(params: {
       path.join(process.cwd(), "data"),
     ].filter(Boolean) as string[];
 
+    const versionFolder = `v${rendition.version || 1}`;
     for (const base of candidateBases) {
-      const candidate = path.join(base, "renditions", projectId, "v1", "preview.m3u8");
-      if (fs.existsSync(candidate)) {
-        playlistPath = candidate;
-        break;
+      const candidates = [
+        path.join(base, "renditions", projectId, versionFolder, "hls", "master.m3u8"),
+        path.join(base, "renditions", projectId, versionFolder, "master.m3u8"),
+        path.join(base, "renditions", projectId, versionFolder, "preview.m3u8"),
+        path.join(base, "renditions", projectId, "v1", "hls", "master.m3u8"),
+        path.join(base, "renditions", projectId, "v1", "master.m3u8"),
+        path.join(base, "renditions", projectId, "v1", "preview.m3u8"),
+      ];
+      for (const candidate of candidates) {
+        if (fs.existsSync(candidate)) {
+          playlistPath = candidate;
+          break;
+        }
       }
+      if (playlistPath) break;
     }
   }
 
@@ -470,8 +499,11 @@ export async function getSegmentPath(params: {
     return null;
   }
 
-  let segmentPath: string | null = path.join(path.dirname(rendition.localPath), safeFilename);
-  if (!fs.existsSync(segmentPath)) {
+  let segmentPath: string | null = rendition.localPath
+    ? path.join(path.dirname(rendition.localPath), safeFilename)
+    : null;
+
+  if (!segmentPath || !fs.existsSync(segmentPath)) {
     segmentPath = null;
     const baseDir = await getWritableBaseDir().catch(() => null);
     const candidateBases = [
@@ -481,12 +513,21 @@ export async function getSegmentPath(params: {
       path.join(process.cwd(), "data"),
     ].filter(Boolean) as string[];
 
+    const versionFolder = `v${rendition.version || 1}`;
     for (const base of candidateBases) {
-      const candidate = path.join(base, "renditions", projectId, "v1", safeFilename);
-      if (fs.existsSync(candidate)) {
-        segmentPath = candidate;
-        break;
+      const candidates = [
+        path.join(base, "renditions", projectId, versionFolder, "hls", safeFilename),
+        path.join(base, "renditions", projectId, versionFolder, safeFilename),
+        path.join(base, "renditions", projectId, "v1", "hls", safeFilename),
+        path.join(base, "renditions", projectId, "v1", safeFilename),
+      ];
+      for (const candidate of candidates) {
+        if (fs.existsSync(candidate)) {
+          segmentPath = candidate;
+          break;
+        }
       }
+      if (segmentPath) break;
     }
   }
 

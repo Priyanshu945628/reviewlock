@@ -19,6 +19,8 @@ import {
   Maximize2,
   Lock,
   RotateCcw,
+  AlertCircle,
+  RefreshCw,
 } from "lucide-react";
 import { Logo } from "@/components/ui/logo";
 import { Button } from "@/components/ui/button";
@@ -38,6 +40,7 @@ type ViewerState =
   | "revoked"
   | "not_found"
   | "unlocked"
+  | "error"
   | "ready";
 
 interface LinkMeta {
@@ -90,6 +93,7 @@ export default function ClientViewerPage() {
   const [isMuted, setIsMuted] = React.useState(false);
   const [showControls, setShowControls] = React.useState(true);
   const [showEndCard, setShowEndCard] = React.useState(false);
+  const [streamError, setStreamError] = React.useState<string | null>(null);
 
   // DOM Drifting Watermark timestamp (updated every 30s)
   const [driftTimestamp, setDriftTimestamp] = React.useState(
@@ -222,11 +226,19 @@ export default function ClientViewerPage() {
         } else if (errCode === "LINK_REVOKED") {
           setViewerState("revoked");
         } else {
-          setErrorMsg(json.error?.message || "Unable to access video.");
+          const message = json.error?.message || "Unable to access video.";
+          setErrorMsg(message);
+          if (!codeToSubmit && viewerState !== "passcode") {
+            setViewerState("error");
+          }
         }
       }
     } catch {
-      setErrorMsg("Connection error. Please try again.");
+      const message = "Connection error. Please try again.";
+      setErrorMsg(message);
+      if (!codeToSubmit && viewerState !== "passcode") {
+        setViewerState("error");
+      }
     } finally {
       setIsVerifyingPasscode(false);
     }
@@ -306,6 +318,7 @@ export default function ClientViewerPage() {
               hls.recoverMediaError();
               break;
             default:
+              setStreamError("Unable to load video stream. The server may still be preparing the preview.");
               hls.destroy();
               break;
           }
@@ -702,6 +715,45 @@ export default function ClientViewerPage() {
     );
   }
 
+  // 8. Error State (with Retry action)
+  if (viewerState === "error") {
+    return (
+      <div className="min-h-screen bg-bg text-text flex flex-col select-none">
+        {renderTopBar()}
+        <main className="flex-1 flex items-center justify-center p-4">
+          <div className="w-full max-w-[440px] rounded-lg bg-surface-1 border border-border p-8 shadow-2xl text-center space-y-6 animate-in fade-in duration-base">
+            <div className="w-12 h-12 rounded-full bg-danger-soft text-danger flex items-center justify-center mx-auto">
+              <AlertCircle className="w-6 h-6 stroke-[2.5]" />
+            </div>
+
+            <div className="space-y-1.5">
+              <h1 className="font-display text-lg font-semibold text-text">
+                Unable to load preview
+              </h1>
+              <p className="text-xs text-text-muted">
+                {errorMsg || "The video could not be loaded at this time. Please check your connection and try again."}
+              </p>
+            </div>
+
+            <Button
+              variant="primary"
+              size="lg"
+              onClick={() => {
+                setViewerState("loading");
+                setErrorMsg(null);
+                fetchLinkMeta();
+              }}
+              className="w-full gap-2 text-sm font-semibold"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Try again
+            </Button>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   // 9. READY / PLAYING PLAYER (DESIGN §6.9)
   const playedPercent = Math.min(100, (currentTime / (duration || 1)) * 100);
   const bufferedPercent = Math.min(100, (bufferedTime / (duration || 1)) * 100);
@@ -773,6 +825,40 @@ export default function ClientViewerPage() {
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 Watch again
+              </Button>
+            </div>
+          )}
+
+          {/* Stream Error Recovery Overlay */}
+          {streamError && (
+            <div className="absolute inset-0 z-30 bg-black/90 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-center space-y-4 animate-in fade-in duration-base">
+              <div className="w-12 h-12 rounded-full bg-danger-soft text-danger flex items-center justify-center">
+                <AlertCircle className="w-6 h-6 stroke-[2.5]" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="font-display text-base font-semibold text-text">
+                  Stream Interrupted
+                </h3>
+                <p className="text-xs text-text-muted max-w-sm">
+                  {streamError}
+                </p>
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setStreamError(null);
+                  if (playlistUrl && videoRef.current && hlsRef.current) {
+                    hlsRef.current.loadSource(playlistUrl);
+                    hlsRef.current.attachMedia(videoRef.current);
+                  } else {
+                    attemptOpen("");
+                  }
+                }}
+                className="gap-1.5 text-xs font-semibold"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                Reload stream
               </Button>
             </div>
           )}
