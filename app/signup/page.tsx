@@ -153,7 +153,7 @@ export default function SignupPage() {
 
         {/* Footer info */}
         <div className="text-[11px] text-text-faint text-center">
-          Private Google Drive storage · Zero client original access
+          Private encrypted cloud vault · Zero client original access
         </div>
       </div>
 

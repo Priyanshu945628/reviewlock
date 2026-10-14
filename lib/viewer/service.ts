@@ -15,6 +15,7 @@ import {
 } from "@/lib/db/schema";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { env } from "@/lib/env";
+import { getWritableBaseDir } from "@/lib/storage/paths";
 import { checkRateLimit } from "@/lib/auth/rate-limit";
 import { verifyPassword } from "@/lib/auth/password";
 import { sendClientOpenedNotification } from "@/lib/notifications/email";
@@ -396,8 +397,28 @@ export async function getRewrittenPlaylist(params: {
     return null;
   }
 
-  const playlistPath = rendition.localPath;
+  // Find playlist file on disk (checking recorded localPath or candidate directories)
+  let playlistPath: string | null = rendition.localPath;
   if (!fs.existsSync(playlistPath)) {
+    playlistPath = null;
+    const baseDir = await getWritableBaseDir().catch(() => null);
+    const candidateBases = [
+      baseDir,
+      env.DATA_DIR,
+      "/data",
+      path.join(process.cwd(), "data"),
+    ].filter(Boolean) as string[];
+
+    for (const base of candidateBases) {
+      const candidate = path.join(base, "renditions", projectId, "v1", "preview.m3u8");
+      if (fs.existsSync(candidate)) {
+        playlistPath = candidate;
+        break;
+      }
+    }
+  }
+
+  if (!playlistPath || !fs.existsSync(playlistPath)) {
     return null;
   }
 
@@ -449,8 +470,27 @@ export async function getSegmentPath(params: {
     return null;
   }
 
-  const segmentPath = path.join(path.dirname(rendition.localPath), safeFilename);
+  let segmentPath: string | null = path.join(path.dirname(rendition.localPath), safeFilename);
   if (!fs.existsSync(segmentPath)) {
+    segmentPath = null;
+    const baseDir = await getWritableBaseDir().catch(() => null);
+    const candidateBases = [
+      baseDir,
+      env.DATA_DIR,
+      "/data",
+      path.join(process.cwd(), "data"),
+    ].filter(Boolean) as string[];
+
+    for (const base of candidateBases) {
+      const candidate = path.join(base, "renditions", projectId, "v1", safeFilename);
+      if (fs.existsSync(candidate)) {
+        segmentPath = candidate;
+        break;
+      }
+    }
+  }
+
+  if (!segmentPath || !fs.existsSync(segmentPath)) {
     return null;
   }
 

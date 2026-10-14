@@ -175,6 +175,15 @@ export default function ClientViewerPage() {
     fetchLinkMeta();
   }, [fetchLinkMeta]);
 
+  // Auto-poll metadata every 2.5s while preview is preparing so client never gets stuck
+  React.useEffect(() => {
+    if (viewerState !== "not_ready") return;
+    const interval = setInterval(() => {
+      fetchLinkMeta();
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [viewerState, fetchLinkMeta]);
+
   // 2. Open / Claim Slot Request
   const attemptOpen = async (codeToSubmit: string) => {
     setIsVerifyingPasscode(true);

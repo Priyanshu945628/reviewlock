@@ -181,7 +181,25 @@ export async function POST(
       .set({ status: "completed" })
       .where(eq(uploadSessions.id, uploadId));
 
-    // 8. Enqueue background processing job in pg-boss (CONTRACT §5)
+    // 8. Trigger processing immediately at upload time in background
+    // This ensures HLS, MP4 previews, and sprites are created within seconds of upload,
+    // so editor & client never have to wait!
+    import("@/lib/queue/worker")
+      .then(({ processProjectJob }) => {
+        processProjectJob({
+          projectId: record.projectId,
+          uploadId,
+          originalPath: assembledFilePath,
+          originalFilename: record.originalFilename,
+        }).catch((err) =>
+          console.error("[UploadComplete] Direct processing error:", err)
+        );
+      })
+      .catch((err) =>
+        console.error("[UploadComplete] Worker import error:", err)
+      );
+
+    // Also enqueue to pg-boss as safety backup
     try {
       await enqueueProcessProject({
         projectId: record.projectId,
@@ -189,23 +207,8 @@ export async function POST(
         originalPath: assembledFilePath,
         originalFilename: record.originalFilename,
       });
-    } catch (queueErr) {
-      console.warn(
-        "[UploadComplete] Could not enqueue job via pg-boss; executing in background directly:",
-        queueErr
-      );
-      if (process.env.NODE_ENV !== "production") {
-        import("@/lib/queue/worker").then(({ processProjectJob }) => {
-          processProjectJob({
-            projectId: record.projectId,
-            uploadId,
-            originalPath: assembledFilePath,
-            originalFilename: record.originalFilename,
-          }).catch((err) =>
-            console.error("[DevWorker] Direct processing failed:", err)
-          );
-        });
-      }
+    } catch {
+      // Direct processing is already running above
     }
 
     return NextResponse.json({

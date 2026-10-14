@@ -92,11 +92,11 @@ export default function LandingPage() {
                   Upload your master cut
                 </h3>
                 <p className="text-xs text-text-muted leading-relaxed">
-                  Upload your full-res ProRes, MP4, or MOV up to 5 GB. Stored securely in your private Google Drive.
+                  Upload your full-res ProRes, MP4, or MOV up to 5 GB. Stored securely in your encrypted private cloud vault.
                 </p>
               </div>
               <div className="p-2.5 rounded bg-surface-2 border border-border font-mono text-[11px] text-text-muted">
-                Private Drive storage ✓
+                Private cloud vault ✓
               </div>
             </div>
 

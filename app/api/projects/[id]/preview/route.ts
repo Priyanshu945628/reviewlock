@@ -1,13 +1,17 @@
 // GET /api/projects/:id/preview
 // Streams the watermarked MP4 preview for the project owner with HTTP Range support
+// Falls back to streaming the assembled original if the preview is still being prepared
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionFromCookie } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { projects } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { projects, renditions, uploadSessions } from "@/lib/db/schema";
+import { eq, and, desc } from "drizzle-orm";
+import { getWritableBaseDir } from "@/lib/storage/paths";
+import { env } from "@/lib/env";
 import * as fs from "fs";
 import * as path from "path";
+import os from "os";
 
 export async function GET(
   req: NextRequest,
@@ -35,23 +39,109 @@ export async function GET(
     );
   }
 
-  const previewPath = path.join(
-    process.cwd(),
-    "data",
-    "renditions",
-    projectId,
-    "v1",
-    "preview.mp4"
-  );
+  // 1. Check renditions table for ready preview_mp4
+  let targetVideoPath: string | null = null;
 
-  if (!fs.existsSync(previewPath)) {
+  const [mp4Rendition] = await db
+    .select()
+    .from(renditions)
+    .where(
+      and(
+        eq(renditions.projectId, projectId),
+        eq(renditions.type, "preview_mp4")
+      )
+    )
+    .orderBy(desc(renditions.version))
+    .limit(1);
+
+  if (mp4Rendition && fs.existsSync(mp4Rendition.localPath)) {
+    targetVideoPath = mp4Rendition.localPath;
+  }
+
+  // 2. Check candidate directories for preview.mp4
+  if (!targetVideoPath) {
+    const baseDir = await getWritableBaseDir().catch(() => null);
+    const candidateBases = [
+      baseDir,
+      env.DATA_DIR,
+      "/data",
+      path.join(process.cwd(), "data"),
+      path.join(os.tmpdir(), "reviewlock-data"),
+    ].filter(Boolean) as string[];
+
+    for (const base of candidateBases) {
+      const candidatePath = path.join(
+        base,
+        "renditions",
+        projectId,
+        "v1",
+        "preview.mp4"
+      );
+      if (fs.existsSync(candidatePath)) {
+        targetVideoPath = candidatePath;
+        break;
+      }
+    }
+  }
+
+  // 3. Fallback: Check if assembled original exists in uploads directory
+  if (!targetVideoPath) {
+    const [uploadSession] = await db
+      .select()
+      .from(uploadSessions)
+      .where(eq(uploadSessions.projectId, projectId))
+      .orderBy(desc(uploadSessions.createdAt))
+      .limit(1);
+
+    if (uploadSession) {
+      const baseDir = await getWritableBaseDir().catch(() => null);
+      const candidateBases = [
+        baseDir,
+        env.DATA_DIR,
+        "/data",
+        path.join(process.cwd(), "data"),
+        path.join(os.tmpdir(), "reviewlock-data"),
+      ].filter(Boolean) as string[];
+
+      for (const base of candidateBases) {
+        const candidate1 = path.join(
+          base,
+          "uploads",
+          uploadSession.id,
+          "original.mp4"
+        );
+        const candidate2 = path.join(
+          base,
+          "uploads",
+          uploadSession.id,
+          project.originalFilename
+        );
+        if (fs.existsSync(candidate1)) {
+          targetVideoPath = candidate1;
+          break;
+        }
+        if (fs.existsSync(candidate2)) {
+          targetVideoPath = candidate2;
+          break;
+        }
+      }
+    }
+  }
+
+  if (!targetVideoPath || !fs.existsSync(targetVideoPath)) {
     return NextResponse.json(
-      { ok: false, error: { code: "NOT_FOUND", message: "Preview file not available yet" } },
+      {
+        ok: false,
+        error: {
+          code: "NOT_FOUND",
+          message: "Preview is generating. Please wait...",
+        },
+      },
       { status: 404 }
     );
   }
 
-  const stat = fs.statSync(previewPath);
+  const stat = fs.statSync(targetVideoPath);
   const fileSize = stat.size;
   const range = req.headers.get("range");
 
@@ -68,9 +158,8 @@ export async function GET(
     }
 
     const chunksize = end - start + 1;
-    const fileStream = fs.createReadStream(previewPath, { start, end });
+    const fileStream = fs.createReadStream(targetVideoPath, { start, end });
 
-    // Convert node stream to web ReadableStream
     const webStream = new ReadableStream({
       start(controller) {
         fileStream.on("data", (chunk) => controller.enqueue(chunk));
@@ -92,7 +181,7 @@ export async function GET(
       },
     });
   } else {
-    const fileStream = fs.createReadStream(previewPath);
+    const fileStream = fs.createReadStream(targetVideoPath);
     const webStream = new ReadableStream({
       start(controller) {
         fileStream.on("data", (chunk) => controller.enqueue(chunk));

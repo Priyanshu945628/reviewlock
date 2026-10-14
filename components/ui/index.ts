@@ -18,3 +18,4 @@ export * from "./tooltip";
 export * from "./empty-state";
 export * from "./skeleton";
 export * from "./logo";
+export * from "./dropdown-menu";

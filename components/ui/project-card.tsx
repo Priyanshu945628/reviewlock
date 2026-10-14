@@ -2,9 +2,17 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { MoreVertical, Film } from "lucide-react";
+import { MoreVertical, Film, ExternalLink, Share2, Copy, Trash2 } from "lucide-react";
 import { StatusPill, StatusPillType } from "./status-pill";
 import { Timecode } from "./timecode";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "./dropdown-menu";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 export interface ProjectCardProps {
@@ -16,6 +24,8 @@ export interface ProjectCardProps {
   status: StatusPillType;
   statusLabel?: string;
   metaText?: string;
+  onCreateLink?: () => void;
+  onDelete?: () => void;
   onActionClick?: (e: React.MouseEvent) => void;
   className?: string;
 }
@@ -29,6 +39,8 @@ export function ProjectCard({
   status,
   statusLabel,
   metaText = "0 links · 0 viewed · just now",
+  onCreateLink,
+  onDelete,
   onActionClick,
   className,
 }: ProjectCardProps) {
@@ -36,7 +48,7 @@ export function ProjectCard({
     <div
       className={cn(
         "group relative flex flex-col rounded-lg border border-border bg-surface-1 overflow-hidden transition-all duration-fast ease-custom",
-        "hover:border-border-strong hover:-translate-y-0.5 cursor-pointer select-none",
+        "hover:border-border-strong hover:-translate-y-0.5 cursor-pointer select-none shadow-xs hover:shadow-md",
         className
       )}
     >
@@ -82,19 +94,60 @@ export function ProjectCard({
         </div>
       </Link>
 
-      {/* Action button top-right fades in on hover */}
-      <button
-        type="button"
+      {/* Custom Dropdown Menu for 3-dots actions (replacing browser alerts) */}
+      <div
+        className="absolute top-2 right-2 z-10"
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
-          onActionClick?.(e);
         }}
-        aria-label="Project actions"
-        className="absolute top-2 right-2 flex items-center justify-center w-7 h-7 rounded-md bg-surface-1/90 border border-border text-text-muted hover:text-text opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
-        <MoreVertical className="w-4 h-4" />
-      </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label="Project actions"
+              className="flex items-center justify-center w-7 h-7 rounded-md bg-surface-1/90 border border-border text-text-muted hover:text-text opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent backdrop-blur-xs cursor-pointer"
+            >
+              <MoreVertical className="w-4 h-4" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem asChild>
+              <Link href={`/projects/${id}`} className="flex items-center gap-2">
+                <ExternalLink className="w-3.5 h-3.5 text-text-muted" />
+                <span>Open Project</span>
+              </Link>
+            </DropdownMenuItem>
+            {onCreateLink && (
+              <DropdownMenuItem onClick={onCreateLink}>
+                <Share2 className="w-3.5 h-3.5 text-text-muted" />
+                <span>Create Share Link</span>
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem
+              onClick={() => {
+                if (typeof navigator !== "undefined" && navigator.clipboard) {
+                  navigator.clipboard.writeText(id);
+                  toast.success("Project ID copied to clipboard");
+                }
+              }}
+            >
+              <Copy className="w-3.5 h-3.5 text-text-muted" />
+              <span>Copy Project ID</span>
+            </DropdownMenuItem>
+            {onDelete && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem variant="danger" onClick={onDelete}>
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete Project</span>
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     </div>
   );
 }

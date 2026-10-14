@@ -28,6 +28,7 @@ import {
   TimelineRangeSelector,
 } from "@/components/ui";
 import { formatTimecode } from "@/lib/format";
+import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -199,8 +200,14 @@ export function ShareLinkDrawer({
         });
         const json = await res.json();
         if (json.ok && json.data?.link) {
-          setCreatedLink(json.data.link);
-          onSuccess?.(json.data.link);
+          const newLink = json.data.link;
+          setCreatedLink(newLink);
+          const url = `${typeof window !== "undefined" ? window.location.origin : ""}/v/${newLink.slug}`;
+          if (typeof navigator !== "undefined" && navigator.clipboard) {
+            navigator.clipboard.writeText(url).catch(() => {});
+          }
+          toast.success("Share link created and copied to clipboard!");
+          onSuccess?.(newLink);
         } else {
           setError(json.error?.message || "Failed to create share link.");
         }

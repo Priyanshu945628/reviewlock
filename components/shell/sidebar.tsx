@@ -68,8 +68,12 @@ export function Sidebar({
       }
     }
     loadStorage();
+    const interval = setInterval(loadStorage, 15000);
+    window.addEventListener("focus", loadStorage);
     return () => {
       mounted = false;
+      clearInterval(interval);
+      window.removeEventListener("focus", loadStorage);
     };
   }, []);
 

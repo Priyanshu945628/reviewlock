@@ -23,6 +23,7 @@ import {
   Maximize2,
   Radio,
   FileCheck2,
+  Loader2,
 } from "lucide-react";
 import {
   Button,
@@ -75,6 +76,18 @@ export default function ProjectDetailPage() {
   const [currentTime, setCurrentTime] = React.useState(0);
   const [isMuted, setIsMuted] = React.useState(false);
   const [videoDuration, setVideoDuration] = React.useState(0);
+  const [videoError, setVideoError] = React.useState(false);
+  const [videoKey, setVideoKey] = React.useState(0);
+
+  // Auto-retry loading the video preview if it is still generating
+  React.useEffect(() => {
+    if (!videoError) return;
+    const timer = setTimeout(() => {
+      setVideoError(false);
+      setVideoKey((k) => k + 1);
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, [videoError]);
 
   // Fetch project and its links
   const loadProjectData = React.useCallback(async () => {
@@ -259,18 +272,30 @@ export default function ProjectDetailPage() {
           <div className="relative aspect-video rounded-lg overflow-hidden bg-black border border-border shadow-md group select-none">
             {/* Native Video (HLS preview or proxy) */}
             <video
+              key={videoKey}
               ref={videoRef}
-              src={`/api/projects/${project.id}/preview`}
+              src={`/api/projects/${project.id}/preview?k=${videoKey}`}
               onTimeUpdate={handleTimeUpdate}
               onLoadedMetadata={() => {
+                setVideoError(false);
                 if (videoRef.current) {
                   setVideoDuration(videoRef.current.duration);
                 }
               }}
+              onError={() => setVideoError(true)}
               onEnded={() => setIsPlaying(false)}
               className="w-full h-full object-contain"
               playsInline
             />
+
+            {/* Video Preparing State Overlay */}
+            {videoError && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-surface-1/95 z-20 gap-2 p-4 text-center">
+                <Loader2 className="w-7 h-7 animate-spin text-accent" />
+                <p className="text-xs font-semibold text-text">Preparing video preview...</p>
+                <p className="text-[11px] text-text-muted">High-speed processing in progress. Preview will play automatically.</p>
+              </div>
+            )}
 
             {/* Diagonal Watermark Overlay (DESIGN §6.9) */}
             <div
@@ -704,7 +729,7 @@ export default function ProjectDetailPage() {
               Danger Zone
             </h3>
             <p className="text-xs text-text-muted">
-              Deleting this project permanently deletes all watermarked previews, share links, and the Google Drive original.
+              Deleting this project permanently deletes all watermarked previews, share links, and the original master video file.
             </p>
             <Button
               variant="danger"
@@ -724,7 +749,7 @@ export default function ProjectDetailPage() {
         open={showDeleteConfirm}
         onOpenChange={setShowDeleteConfirm}
         title="Delete project permanently?"
-        description="This action cannot be undone. All watermarked previews, active share links, and the original video stored on Google Drive will be deleted immediately."
+        description="This action cannot be undone. All watermarked previews, active share links, and the original master video file will be deleted immediately."
         confirmLabel="Yes, delete project"
         cancelLabel="Cancel"
         loading={isDeleting}

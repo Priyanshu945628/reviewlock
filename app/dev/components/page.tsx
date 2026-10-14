@@ -23,6 +23,7 @@ import {
   Skeleton,
   Logo,
 } from "@/components/ui";
+import { toast } from "sonner";
 import { ShareLinkDrawer } from "@/components/share/share-link-drawer";
 import { Film, Sparkles, AlertTriangle, Trash2, FolderPlus } from "lucide-react";
 
@@ -468,7 +469,7 @@ export default function DevComponentsPage() {
               title="No projects uploaded yet"
               description="Upload your first cut. Nothing is shared until you create a link."
               actionLabel="New upload"
-              onAction={() => alert("Upload triggered")}
+              onAction={() => toast.info("Upload modal triggered")}
             />
           </div>
         </div>
@@ -483,7 +484,7 @@ export default function DevComponentsPage() {
         confirmLabel="Yes, release"
         onConfirm={() => {
           setConfirmOpen(false);
-          alert("Full file released");
+          toast.success("Full file released");
         }}
       />
 
@@ -492,12 +493,12 @@ export default function DevComponentsPage() {
         open={dangerConfirmOpen}
         onOpenChange={setDangerConfirmOpen}
         title="Delete project permanently?"
-        description="This will delete the original file from Google Drive and all generated preview renditions. This action cannot be reversed."
+        description="This will delete the original master file and all generated preview renditions. This action cannot be reversed."
         confirmLabel="Delete project"
         variant="danger"
         onConfirm={() => {
           setDangerConfirmOpen(false);
-          alert("Project deleted");
+          toast.success("Project deleted successfully");
         }}
       />
 
@@ -521,7 +522,7 @@ export default function DevComponentsPage() {
               size="sm"
               onClick={() => {
                 setDrawerOpen(false);
-                alert("Link created successfully");
+                toast.success("Link created successfully");
               }}
             >
               Create link
