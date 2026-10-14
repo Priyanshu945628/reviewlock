@@ -112,10 +112,10 @@ export function ShareLinkDrawer({
       } else {
         setClientLabel("");
         setPreviewStart(0);
-        setPreviewEnd(Math.min(30, projectDurationSeconds || 30));
+        setPreviewEnd(projectDurationSeconds || 30);
         setVisibility("private");
         setPasscode(generateRandomPasscode());
-        setMaxViewers(1);
+        setMaxViewers(100);
         setExpiryOption("never");
         setAllowPreviewDownload(false);
         setWatermarkText("PREVIEW · NOT PAID");
@@ -201,13 +201,14 @@ export function ShareLinkDrawer({
         const json = await res.json();
         if (json.ok && json.data?.link) {
           const newLink = json.data.link;
-          setCreatedLink(newLink);
           const url = `${typeof window !== "undefined" ? window.location.origin : ""}/v/${newLink.slug}`;
           if (typeof navigator !== "undefined" && navigator.clipboard) {
             navigator.clipboard.writeText(url).catch(() => {});
           }
           toast.success("Share link created and copied to clipboard!");
           onSuccess?.(newLink);
+          onOpenChange(false);
+          setCreatedLink(null);
         } else {
           setError(json.error?.message || "Failed to create share link.");
         }
@@ -449,34 +450,77 @@ export function ShareLinkDrawer({
 
             <div className="border-t border-border/80" />
 
-            {/* Section 4: Viewer limit (Stepper − 1 +) */}
+            {/* Section 4: Viewer limit (Option for all clients / unlimited viewers) */}
             <div className="space-y-2">
               <label className="text-xs font-semibold text-text uppercase tracking-wider font-mono">
-                4. Viewer limit
+                4. Viewer Limit (Who can watch)
               </label>
-              <div className="flex items-center gap-3">
+
+              {/* Quick presets */}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setMaxViewers(1)}
+                  className={cn(
+                    "px-2.5 py-1 text-xs rounded border transition-colors cursor-pointer",
+                    maxViewers === 1
+                      ? "bg-accent-soft border-accent text-accent font-semibold"
+                      : "border-border bg-surface-2 text-text-muted hover:text-text"
+                  )}
+                >
+                  1 Viewer
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMaxViewers(5)}
+                  className={cn(
+                    "px-2.5 py-1 text-xs rounded border transition-colors cursor-pointer",
+                    maxViewers === 5
+                      ? "bg-accent-soft border-accent text-accent font-semibold"
+                      : "border-border bg-surface-2 text-text-muted hover:text-text"
+                  )}
+                >
+                  5 Viewers
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMaxViewers(100)}
+                  className={cn(
+                    "px-2.5 py-1 text-xs rounded border transition-colors cursor-pointer",
+                    maxViewers >= 100
+                      ? "bg-accent border-accent text-accent-ink font-semibold"
+                      : "border-border bg-surface-2 text-text-muted hover:text-text"
+                  )}
+                >
+                  All Clients (Unlimited)
+                </button>
+              </div>
+
+              <div className="flex items-center gap-3 pt-1">
                 <div className="flex items-center rounded-md border border-border bg-surface-2 p-1">
                   <button
                     type="button"
                     onClick={() => setMaxViewers(Math.max(1, maxViewers - 1))}
                     disabled={maxViewers <= 1}
-                    className="p-1.5 rounded hover:bg-surface-3 disabled:opacity-40 transition-colors"
+                    className="p-1.5 rounded hover:bg-surface-3 disabled:opacity-40 transition-colors cursor-pointer"
                   >
                     <Minus className="w-3.5 h-3.5" />
                   </button>
-                  <span className="font-mono text-sm font-semibold w-12 text-center text-text tabular-nums">
-                    {maxViewers}
+                  <span className="font-mono text-sm font-semibold w-16 text-center text-text tabular-nums">
+                    {maxViewers >= 100 ? "All" : maxViewers}
                   </span>
                   <button
                     type="button"
-                    onClick={() => setMaxViewers(maxViewers + 1)}
-                    className="p-1.5 rounded hover:bg-surface-3 transition-colors"
+                    onClick={() => setMaxViewers(maxViewers >= 100 ? 1 : maxViewers + 1)}
+                    className="p-1.5 rounded hover:bg-surface-3 transition-colors cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" />
                   </button>
                 </div>
                 <span className="text-xs text-text-muted">
-                  Unique viewers who can open this link
+                  {maxViewers >= 100
+                    ? "Anyone with the link can watch without viewer limits."
+                    : `${maxViewers} unique client${maxViewers > 1 ? "s" : ""} can open this link.`}
                 </span>
               </div>
             </div>

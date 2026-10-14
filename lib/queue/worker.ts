@@ -78,7 +78,7 @@ export async function processProjectJob(
         .where(eq(projects.id, projectId));
     }
 
-    const previewLength = Math.min(60, duration || 60); // Default 60s preview on initial upload (Chunk B3)
+    const previewLength = duration || 60; // Generate full watermarked preview for complete project duration
     const baseDir = await getWritableBaseDir();
     const renditionsBaseDir = path.join(
       baseDir,

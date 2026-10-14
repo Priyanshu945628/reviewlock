@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Lock, AlertCircle } from "lucide-react";
+import { Lock, Sparkles, Check, ChevronLeft, ChevronRight } from "lucide-react";
 import { formatTimecode } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -24,9 +24,14 @@ export function TimelineRangeSelector({
   disabled = false,
   className,
 }: TimelineRangeSelectorProps) {
-  const [mode, setMode] = React.useState<"first_n" | "custom">(
-    startSeconds === 0 ? "first_n" : "custom"
-  );
+  const total = Math.max(1, Math.round(totalDurationSeconds));
+
+  // Determine initial mode
+  const [mode, setMode] = React.useState<"full" | "first_n" | "custom">(() => {
+    if (startSeconds === 0 && endSeconds >= total) return "full";
+    if (startSeconds === 0) return "first_n";
+    return "custom";
+  });
 
   const trackRef = React.useRef<HTMLDivElement | null>(null);
   const draggingRef = React.useRef<"start" | "end" | "body" | null>(null);
@@ -37,14 +42,26 @@ export function TimelineRangeSelector({
   });
 
   // Clamp safely
-  const total = Math.max(1, totalDurationSeconds);
-  const safeStart = Math.max(0, Math.min(startSeconds, total - 1));
-  const safeEnd = Math.max(safeStart + 1, Math.min(endSeconds, total));
+  const safeStart = Math.max(0, Math.min(Math.round(startSeconds), total - 1));
+  const safeEnd = Math.max(safeStart + 1, Math.min(Math.round(endSeconds), total));
   const previewDuration = safeEnd - safeStart;
   const percentage = Math.round((previewDuration / total) * 100);
 
   const startPercent = (safeStart / total) * 100;
   const endPercent = (safeEnd / total) * 100;
+
+  // Stable refs for event listeners so listeners are never torn down mid-drag
+  const safeStartRef = React.useRef(safeStart);
+  const safeEndRef = React.useRef(safeEnd);
+  const totalRef = React.useRef(total);
+  const onChangeRef = React.useRef(onChange);
+  const modeRef = React.useRef(mode);
+
+  safeStartRef.current = safeStart;
+  safeEndRef.current = safeEnd;
+  totalRef.current = total;
+  onChangeRef.current = onChange;
+  modeRef.current = mode;
 
   // Convert clientX to seconds
   const clientXToSeconds = React.useCallback(
@@ -53,30 +70,33 @@ export function TimelineRangeSelector({
       const rect = trackRef.current.getBoundingClientRect();
       const clickX = Math.max(0, Math.min(clientX - rect.left, rect.width));
       const ratio = clickX / rect.width;
-      return Math.round(ratio * total);
+      return Math.round(ratio * totalRef.current);
     },
-    [total]
+    []
   );
 
   // Global mouse/touch move and up listeners during drag
   React.useEffect(() => {
     const handlePointerMove = (e: PointerEvent) => {
-      if (!draggingRef.current || disabled) return;
+      const activeDrag = draggingRef.current;
+      if (!activeDrag || disabled) return;
 
       const currentSec = clientXToSeconds(e.clientX);
-      const activeDrag = draggingRef.current;
+      const curStart = safeStartRef.current;
+      const curEnd = safeEndRef.current;
+      const curTotal = totalRef.current;
 
       if (activeDrag === "start") {
-        const newStart = Math.max(0, Math.min(currentSec, safeEnd - 1));
-        onChange(newStart, safeEnd);
+        const newStart = Math.max(0, Math.min(currentSec, curEnd - 1));
+        onChangeRef.current(newStart, curEnd);
       } else if (activeDrag === "end") {
-        const newEnd = Math.max(safeStart + 1, Math.min(currentSec, total));
-        onChange(safeStart, newEnd);
+        const newEnd = Math.max(curStart + 1, Math.min(currentSec, curTotal));
+        onChangeRef.current(curStart, newEnd);
       } else if (activeDrag === "body") {
         if (!trackRef.current) return;
         const rect = trackRef.current.getBoundingClientRect();
         const deltaX = e.clientX - dragStartXRef.current;
-        const deltaSec = Math.round((deltaX / rect.width) * total);
+        const deltaSec = Math.round((deltaX / rect.width) * curTotal);
 
         const rangeLen =
           dragInitialRangeRef.current.end - dragInitialRangeRef.current.start;
@@ -87,12 +107,12 @@ export function TimelineRangeSelector({
           newStart = 0;
           newEnd = rangeLen;
         }
-        if (newEnd > total) {
-          newEnd = total;
-          newStart = total - rangeLen;
+        if (newEnd > curTotal) {
+          newEnd = curTotal;
+          newStart = curTotal - rangeLen;
         }
 
-        onChange(newStart, newEnd);
+        onChangeRef.current(newStart, newEnd);
       }
     };
 
@@ -107,42 +127,49 @@ export function TimelineRangeSelector({
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerUp);
     };
-  }, [clientXToSeconds, disabled, onChange, safeEnd, safeStart, total]);
+  }, [clientXToSeconds, disabled]);
 
-  // Handle Quick Pick Buttons for First N seconds
-  const handleQuickPick = (sec: number) => {
-    const targetEnd = Math.min(total, sec);
-    onChange(0, targetEnd);
+  // Quick picks
+  const handleSelectFull = () => {
+    setMode("full");
+    onChange(0, total);
   };
 
-  // Keyboard navigation on handles
-  const handleKeyDown = (
-    handle: "start" | "end",
-    e: React.KeyboardEvent<HTMLDivElement>
-  ) => {
-    if (disabled) return;
-    const step = e.shiftKey ? 10 : 1;
+  const handleSelectFirstN = (sec: number) => {
+    setMode("first_n");
+    onChange(0, Math.min(total, sec));
+  };
 
-    if (e.key === "ArrowLeft") {
-      e.preventDefault();
-      if (handle === "start") {
-        onChange(Math.max(0, safeStart - step), safeEnd);
+  const handleStepStart = (delta: number) => {
+    const next = Math.max(0, Math.min(safeStart + delta, safeEnd - 1));
+    onChange(next, safeEnd);
+  };
+
+  const handleStepEnd = (delta: number) => {
+    const next = Math.max(safeStart + 1, Math.min(safeEnd + delta, total));
+    onChange(safeStart, next);
+  };
+
+  // Click on track directly seeks/sets range
+  const handleTrackPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (disabled) return;
+    const clickSec = clientXToSeconds(e.clientX);
+
+    if (mode === "first_n" || mode === "full") {
+      setMode("first_n");
+      const targetEnd = Math.max(1, Math.min(clickSec, total));
+      onChange(0, targetEnd);
+      draggingRef.current = "end";
+    } else {
+      const distToStart = Math.abs(clickSec - safeStart);
+      const distToEnd = Math.abs(clickSec - safeEnd);
+      if (distToStart < distToEnd) {
+        onChange(Math.max(0, Math.min(clickSec, safeEnd - 1)), safeEnd);
+        draggingRef.current = "start";
       } else {
-        onChange(safeStart, Math.max(safeStart + 1, safeEnd - step));
+        onChange(safeStart, Math.max(safeStart + 1, Math.min(clickSec, total)));
+        draggingRef.current = "end";
       }
-    } else if (e.key === "ArrowRight") {
-      e.preventDefault();
-      if (handle === "start") {
-        onChange(Math.min(safeEnd - 1, safeStart + step), safeEnd);
-      } else {
-        onChange(safeStart, Math.min(total, safeEnd + step));
-      }
-    } else if (e.key === "Home") {
-      e.preventDefault();
-      if (handle === "start") onChange(0, safeEnd);
-    } else if (e.key === "End") {
-      e.preventDefault();
-      if (handle === "end") onChange(safeStart, total);
     }
   };
 
@@ -156,24 +183,40 @@ export function TimelineRangeSelector({
     return ticks;
   }, [total]);
 
-  // Thumbnails count (8 to 12 frames)
   const thumbCount = 10;
 
   return (
     <div className={cn("flex flex-col gap-3 w-full select-none", className)}>
-      {/* Top Bar: Mode Switcher & Quick-pick chips */}
+      {/* 1. Mode Switcher: Full Video | First N seconds | Custom segment */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="inline-flex rounded-md p-0.5 bg-surface-2 border border-border">
           <button
             type="button"
             disabled={disabled}
+            onClick={handleSelectFull}
+            className={cn(
+              "px-3 py-1.5 text-xs font-medium rounded-sm transition-colors cursor-pointer",
+              mode === "full" && safeStart === 0 && safeEnd === total
+                ? "bg-accent text-accent-ink font-semibold shadow-xs"
+                : "text-text-muted hover:text-text"
+            )}
+          >
+            Entire video (100%)
+          </button>
+          <button
+            type="button"
+            disabled={disabled}
             onClick={() => {
               setMode("first_n");
-              onChange(0, safeEnd);
+              if (safeEnd === total) {
+                onChange(0, Math.min(30, total));
+              } else {
+                onChange(0, safeEnd);
+              }
             }}
             className={cn(
-              "px-2.5 py-1 text-xs font-medium rounded-sm transition-colors",
-              mode === "first_n"
+              "px-3 py-1.5 text-xs font-medium rounded-sm transition-colors cursor-pointer",
+              mode === "first_n" && (safeStart !== 0 || safeEnd !== total)
                 ? "bg-surface-3 text-accent font-semibold"
                 : "text-text-muted hover:text-text"
             )}
@@ -185,7 +228,7 @@ export function TimelineRangeSelector({
             disabled={disabled}
             onClick={() => setMode("custom")}
             className={cn(
-              "px-2.5 py-1 text-xs font-medium rounded-sm transition-colors",
+              "px-3 py-1.5 text-xs font-medium rounded-sm transition-colors cursor-pointer",
               mode === "custom"
                 ? "bg-surface-3 text-accent font-semibold"
                 : "text-text-muted hover:text-text"
@@ -195,52 +238,85 @@ export function TimelineRangeSelector({
           </button>
         </div>
 
-        {mode === "first_n" && (
-          <div className="flex items-center gap-1.5">
-            {[15, 30, 60, 120].map((sec) => (
-              <button
-                key={sec}
-                type="button"
-                disabled={disabled || total < sec}
-                onClick={() => handleQuickPick(sec)}
-                className={cn(
-                  "px-2 py-0.5 text-xs font-mono rounded-sm border transition-colors",
-                  safeEnd === sec && safeStart === 0
-                    ? "bg-accent-soft border-accent text-accent font-semibold"
-                    : "border-border bg-surface-2 text-text-muted hover:border-border-strong hover:text-text",
-                  (disabled || total < sec) && "opacity-40 pointer-events-none"
-                )}
-              >
-                {sec < 60 ? `${sec}s` : `${sec / 60}m`}
-              </button>
-            ))}
-          </div>
-        )}
+        {/* Quick Pick Chips */}
+        <div className="flex items-center gap-1.5">
+          {[15, 30].map((sec) => (
+            <button
+              key={sec}
+              type="button"
+              disabled={disabled || total < sec}
+              onClick={() => handleSelectFirstN(sec)}
+              className={cn(
+                "px-2 py-1 text-xs font-mono rounded-sm border transition-colors cursor-pointer",
+                safeEnd === sec && safeStart === 0 && mode !== "full"
+                  ? "bg-accent-soft border-accent text-accent font-semibold"
+                  : "border-border bg-surface-2 text-text-muted hover:border-border-strong hover:text-text",
+                (disabled || total < sec) && "opacity-40 pointer-events-none"
+              )}
+            >
+              {sec}s
+            </button>
+          ))}
+          {total >= 60 && (
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => handleSelectFirstN(60)}
+              className={cn(
+                "px-2 py-1 text-xs font-mono rounded-sm border transition-colors cursor-pointer",
+                safeEnd === 60 && safeStart === 0 && mode !== "full"
+                  ? "bg-accent-soft border-accent text-accent font-semibold"
+                  : "border-border bg-surface-2 text-text-muted hover:border-border-strong hover:text-text"
+              )}
+            >
+              1m
+            </button>
+          )}
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={handleSelectFull}
+            className={cn(
+              "px-2.5 py-1 text-xs font-mono rounded-sm border transition-colors cursor-pointer flex items-center gap-1",
+              safeStart === 0 && safeEnd === total
+                ? "bg-accent border-accent text-accent-ink font-semibold"
+                : "border-border bg-surface-2 text-text-muted hover:border-border-strong hover:text-text"
+            )}
+          >
+            <span>Full</span>
+            <span className="text-[10px] opacity-80">({formatTimecode(total)})</span>
+          </button>
+        </div>
       </div>
 
-      {/* Main Track Wrapper with Timecode Floating Badges */}
-      <div className="relative pt-6 pb-4">
-        {/* Floating timecode badges above handles */}
+      {/* 2. Main Track Wrapper with Timecode Badges */}
+      <div className="relative pt-6 pb-2">
+        {/* Floating timecode badge above start */}
+        {(mode === "custom" || safeStart > 0) && (
+          <div
+            className="absolute top-0 -translate-x-1/2 font-mono text-[11px] font-medium text-accent bg-surface-1 px-1.5 py-0.5 rounded border border-accent/40 shadow-xs tabular-nums pointer-events-none z-30"
+            style={{ left: `${startPercent}%` }}
+          >
+            {formatTimecode(safeStart)}
+          </div>
+        )}
+
+        {/* Floating timecode badge above end */}
         <div
-          className="absolute top-0 -translate-x-1/2 font-mono text-[11px] font-medium text-accent bg-surface-2 px-1.5 py-0.5 rounded border border-accent/40 shadow-xs tabular-nums pointer-events-none z-30"
-          style={{ left: `${startPercent}%` }}
-        >
-          {formatTimecode(safeStart)}
-        </div>
-        <div
-          className="absolute top-0 -translate-x-1/2 font-mono text-[11px] font-medium text-accent bg-surface-2 px-1.5 py-0.5 rounded border border-accent/40 shadow-xs tabular-nums pointer-events-none z-30"
+          className="absolute top-0 -translate-x-1/2 font-mono text-[11px] font-medium text-accent bg-surface-1 px-1.5 py-0.5 rounded border border-accent/40 shadow-xs tabular-nums pointer-events-none z-30"
           style={{ left: `${endPercent}%` }}
         >
           {formatTimecode(safeEnd)}
         </div>
 
-        {/* The 64px Track */}
+        {/* The 60px Interactive Timeline Track */}
         <div
           ref={trackRef}
-          className="relative h-16 w-full rounded-[10px] bg-surface-2 border border-border overflow-hidden cursor-pointer"
+          onPointerDown={handleTrackPointerDown}
+          className="relative h-14 w-full rounded-lg bg-surface-2 border border-border overflow-hidden cursor-pointer shadow-inner"
         >
-          {/* Background Filmstrip */}
-          <div className="absolute inset-0 flex divide-x divide-border/40 pointer-events-none opacity-55">
+          {/* Filmstrip Frame Background */}
+          <div className="absolute inset-0 flex divide-x divide-border/30 pointer-events-none opacity-40">
             {Array.from({ length: thumbCount }).map((_, i) => (
               <div
                 key={i}
@@ -254,7 +330,7 @@ export function TimelineRangeSelector({
                   />
                 ) : (
                   <div className="w-full h-full bg-surface-3 flex items-center justify-center border-r border-border/20">
-                    <span className="font-mono text-[9px] text-text-faint opacity-40">
+                    <span className="font-mono text-[9px] text-text-faint opacity-50">
                       {formatTimecode(Math.round((i / thumbCount) * total))}
                     </span>
                   </div>
@@ -270,11 +346,11 @@ export function TimelineRangeSelector({
               style={{
                 width: `${startPercent}%`,
                 backgroundImage:
-                  "repeating-linear-gradient(45deg, rgba(0,0,0,0.72) 0, rgba(0,0,0,0.72) 8px, rgba(0,0,0,0.85) 8px, rgba(0,0,0,0.85) 16px)",
+                  "repeating-linear-gradient(45deg, rgba(0,0,0,0.7) 0, rgba(0,0,0,0.7) 8px, rgba(0,0,0,0.85) 8px, rgba(0,0,0,0.85) 16px)",
               }}
             >
-              {startPercent > 15 && (
-                <Lock className="w-4 h-4 text-text-muted/60" />
+              {startPercent > 12 && (
+                <Lock className="w-3.5 h-3.5 text-text-muted/60" />
               )}
             </div>
           )}
@@ -287,7 +363,7 @@ export function TimelineRangeSelector({
               width: `${endPercent - startPercent}%`,
             }}
             onPointerDown={(e) => {
-              if (disabled || mode === "first_n") return;
+              if (disabled || mode === "full") return;
               draggingRef.current = "body";
               dragStartXRef.current = e.clientX;
               dragInitialRangeRef.current = {
@@ -305,72 +381,54 @@ export function TimelineRangeSelector({
               style={{
                 left: `${endPercent}%`,
                 backgroundImage:
-                  "repeating-linear-gradient(45deg, rgba(0,0,0,0.72) 0, rgba(0,0,0,0.72) 8px, rgba(0,0,0,0.85) 8px, rgba(0,0,0,0.85) 16px)",
+                  "repeating-linear-gradient(45deg, rgba(0,0,0,0.7) 0, rgba(0,0,0,0.7) 8px, rgba(0,0,0,0.85) 8px, rgba(0,0,0,0.85) 16px)",
               }}
             >
-              {100 - endPercent > 15 && (
-                <Lock className="w-4 h-4 text-text-muted/60" />
+              {100 - endPercent > 12 && (
+                <Lock className="w-3.5 h-3.5 text-text-muted/60" />
               )}
             </div>
           )}
 
-          {/* Left Handle (Custom segment mode only) */}
+          {/* Left Handle (Custom mode only) */}
           {mode === "custom" && (
             <div
               role="slider"
               tabIndex={disabled ? -1 : 0}
               aria-label="Preview start time"
-              aria-valuemin={0}
-              aria-valuemax={safeEnd - 1}
-              aria-valuenow={safeStart}
-              aria-valuetext={`${safeStart} seconds`}
-              onKeyDown={(e) => handleKeyDown("start", e)}
               onPointerDown={(e) => {
                 if (disabled) return;
                 draggingRef.current = "start";
+                e.currentTarget.setPointerCapture(e.pointerId);
                 e.stopPropagation();
               }}
               style={{ left: `${startPercent}%` }}
-              className={cn(
-                "absolute top-0 bottom-0 z-20 w-3 -translate-x-1/2 bg-accent rounded-sm cursor-ew-resize flex items-center justify-center shadow-md",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
-                "touch-none"
-              )}
+              className="absolute top-0 bottom-0 z-20 w-4 -translate-x-1/2 bg-accent rounded-sm cursor-ew-resize flex items-center justify-center shadow-lg touch-none hover:scale-105 transition-transform"
             >
-              {/* Grip lines */}
               <div className="flex gap-0.5 pointer-events-none">
-                <span className="w-[1px] h-3 bg-accent-ink rounded-full" />
-                <span className="w-[1px] h-3 bg-accent-ink rounded-full" />
+                <span className="w-[1.5px] h-3 bg-accent-ink rounded-full" />
+                <span className="w-[1.5px] h-3 bg-accent-ink rounded-full" />
               </div>
             </div>
           )}
 
-          {/* Right Handle (Both modes) */}
+          {/* Right Handle (Always draggable) */}
           <div
             role="slider"
             tabIndex={disabled ? -1 : 0}
             aria-label="Preview end time"
-            aria-valuemin={safeStart + 1}
-            aria-valuemax={total}
-            aria-valuenow={safeEnd}
-            aria-valuetext={`${safeEnd} seconds`}
-            onKeyDown={(e) => handleKeyDown("end", e)}
             onPointerDown={(e) => {
               if (disabled) return;
               draggingRef.current = "end";
+              e.currentTarget.setPointerCapture(e.pointerId);
               e.stopPropagation();
             }}
             style={{ left: `${endPercent}%` }}
-            className={cn(
-              "absolute top-0 bottom-0 z-20 w-3 -translate-x-1/2 bg-accent rounded-sm cursor-ew-resize flex items-center justify-center shadow-md",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
-              "touch-none"
-            )}
+            className="absolute top-0 bottom-0 z-20 w-4 -translate-x-1/2 bg-accent rounded-sm cursor-ew-resize flex items-center justify-center shadow-lg touch-none hover:scale-105 transition-transform"
           >
-            {/* Grip lines */}
             <div className="flex gap-0.5 pointer-events-none">
-              <span className="w-[1px] h-3 bg-accent-ink rounded-full" />
-              <span className="w-[1px] h-3 bg-accent-ink rounded-full" />
+              <span className="w-[1.5px] h-3 bg-accent-ink rounded-full" />
+              <span className="w-[1.5px] h-3 bg-accent-ink rounded-full" />
             </div>
           </div>
         </div>
@@ -390,26 +448,67 @@ export function TimelineRangeSelector({
         </div>
       </div>
 
-      {/* Summary line & warning */}
-      <div className="flex flex-col gap-1 text-sm">
-        <p className="text-text-muted">
-          Client will see{" "}
-          <strong className="text-text font-semibold font-mono">
-            {formatTimecode(safeStart)} → {formatTimecode(safeEnd)}
-          </strong>{" "}
-          of{" "}
-          <strong className="text-text font-semibold font-mono">
-            {formatTimecode(total)}
-          </strong>{" "}
-          ({percentage}%)
-        </p>
+      {/* 3. Range Steppers & Summary */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 rounded-lg bg-surface-2/60 border border-border">
+        {/* Exact Timecode Badges with Steppers */}
+        <div className="flex items-center gap-2">
+          {mode === "custom" && (
+            <div className="flex items-center gap-1">
+              <span className="text-[11px] text-text-muted font-mono">Start:</span>
+              <button
+                type="button"
+                onClick={() => handleStepStart(-5)}
+                disabled={safeStart <= 0}
+                className="px-1.5 py-0.5 rounded bg-surface-3 text-[11px] text-text font-mono hover:bg-surface-3/80 disabled:opacity-30 cursor-pointer"
+              >
+                -5s
+              </button>
+              <span className="font-mono text-xs font-semibold px-1.5 py-0.5 rounded bg-surface-3 text-accent tabular-nums">
+                {formatTimecode(safeStart)}
+              </span>
+              <button
+                type="button"
+                onClick={() => handleStepStart(5)}
+                disabled={safeStart >= safeEnd - 1}
+                className="px-1.5 py-0.5 rounded bg-surface-3 text-[11px] text-text font-mono hover:bg-surface-3/80 disabled:opacity-30 cursor-pointer"
+              >
+                +5s
+              </button>
+            </div>
+          )}
 
-        {percentage > 50 && (
-          <div className="flex items-center gap-1.5 text-xs text-accent mt-0.5">
-            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-            <span>That&apos;s a big preview. Consider a shorter one.</span>
+          <div className="flex items-center gap-1">
+            <span className="text-[11px] text-text-muted font-mono">End:</span>
+            <button
+              type="button"
+              onClick={() => handleStepEnd(-5)}
+              disabled={safeEnd <= safeStart + 1}
+              className="px-1.5 py-0.5 rounded bg-surface-3 text-[11px] text-text font-mono hover:bg-surface-3/80 disabled:opacity-30 cursor-pointer"
+            >
+              -5s
+            </button>
+            <span className="font-mono text-xs font-semibold px-1.5 py-0.5 rounded bg-surface-3 text-accent tabular-nums">
+              {formatTimecode(safeEnd)}
+            </span>
+            <button
+              type="button"
+              onClick={() => handleStepEnd(5)}
+              disabled={safeEnd >= total}
+              className="px-1.5 py-0.5 rounded bg-surface-3 text-[11px] text-text font-mono hover:bg-surface-3/80 disabled:opacity-30 cursor-pointer"
+            >
+              +5s
+            </button>
           </div>
-        )}
+        </div>
+
+        {/* Client visibility summary */}
+        <div className="text-xs text-text-muted">
+          Client sees{" "}
+          <span className="font-mono font-semibold text-text">
+            {formatTimecode(safeStart)} → {formatTimecode(safeEnd)}
+          </span>{" "}
+          ({percentage}%)
+        </div>
       </div>
     </div>
   );
