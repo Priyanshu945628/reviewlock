@@ -877,8 +877,9 @@ export default function ClientViewerPage() {
               {meta?.videoTitle}
             </h1>
             <p className="text-xs text-text-muted">
-              Preview only · {formatTimecode(meta?.previewDuration || 30)} of{" "}
-              {formatTimecode(meta?.totalDurationSeconds || 0)}
+              {meta?.previewDuration && meta?.totalDurationSeconds && meta.previewDuration >= meta.totalDurationSeconds
+                ? `Watermarked preview · Full video (${formatTimecode(meta.totalDurationSeconds)})`
+                : `Preview only · ${formatTimecode(meta?.previewDuration || 30)} of ${formatTimecode(meta?.totalDurationSeconds || 0)}`}
             </p>
           </div>
 

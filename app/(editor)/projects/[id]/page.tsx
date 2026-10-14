@@ -481,7 +481,7 @@ export default function ProjectDetailPage() {
                             <div className="flex items-center gap-2 text-xs font-mono text-text-muted">
                               <CopyLinkButton
                                 url={typeof window !== "undefined" ? `${window.location.origin}/v/${link.slug}` : `/v/${link.slug}`}
-                                displayUrl={`rl.app/v/${link.slug}`}
+                                displayUrl={typeof window !== "undefined" ? `${window.location.host}/v/${link.slug}` : `/v/${link.slug}`}
                               />
                             </div>
                           </div>
